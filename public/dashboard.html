@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WoW Dashboard - Character Overview</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <h1>WoW Character Dashboard</h1>
+                <div class="header-info">
+                    <span id="user-tag" class="user-tag"></span>
+                    <button id="refresh-btn" class="btn-refresh">🔄 Refresh Data</button>
+                    <a href="/characters" class="btn-link">Character Manager</a>
+                    <button id="logout-btn" class="btn-logout">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Grid -->
+        <main class="dashboard-main">
+            <!-- Quick Stats Row -->
+            <section class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-characters">0</div>
+                    <div class="stat-label">Total Characters</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="max-level-chars">0</div>
+                    <div class="stat-label">Level 80 Characters</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="avg-ilvl">0</div>
+                    <div class="stat-label">Average Item Level</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="total-professions">0</div>
+                    <div class="stat-label">Total Professions</div>
+                </div>
+            </section>
+
+            <!-- Main Content Grid -->
+            <div class="dashboard-grid">
+                <!-- Class/Race/Faction Matrix -->
+                <section class="dashboard-card coverage-card">
+                    <h2>Character Coverage</h2>
+                    <div class="coverage-stats">
+                        <span id="coverage-percentage">0%</span> Complete
+                        <span class="coverage-detail">(<span id="coverage-count">0</span> unique combinations)</span>
+                    </div>
+                    
+                    <div class="coverage-grid">
+                        <div class="coverage-section">
+                            <h3>By Race</h3>
+                            <div id="race-list" class="coverage-list">
+                                <!-- Race counts will be populated here -->
+                            </div>
+                        </div>
+                        
+                        <div class="coverage-section">
+                            <h3>By Class</h3>
+                            <div id="class-list" class="coverage-list">
+                                <!-- Class counts will be populated here -->
+                            </div>
+                        </div>
+                        
+                        <div class="coverage-section">
+                            <h3>By Faction</h3>
+                            <div id="faction-list" class="coverage-list">
+                                <!-- Faction counts will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Profession Overview -->
+                <section class="dashboard-card professions-card">
+                    <h2>Profession Coverage</h2>
+                    <div id="professions-overview" class="professions-grid">
+                        <!-- Professions will be populated here -->
+                    </div>
+                </section>
+
+                <!-- Character List Summary -->
+                <section class="dashboard-card characters-card">
+                    <h2>Top Characters by Item Level</h2>
+                    <div id="top-characters" class="character-list">
+                        <!-- Top characters will be listed here -->
+                    </div>
+                </section>
+
+                <!-- Recent Activity -->
+                <section class="dashboard-card activity-card">
+                    <h2>Character Goals & Notes</h2>
+                    <div id="recent-notes" class="notes-summary">
+                        <!-- Recent notes preview will be shown here -->
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>

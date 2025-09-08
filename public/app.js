@@ -81,20 +81,44 @@ function displayCharacters() {
     }
     
     charList.innerHTML = characters.map(char => {
-        // Handle faction being either a string or object
-        const factionName = typeof char.faction === 'string' ? char.faction : char.faction.name;
+        // Extract value if it's a localized object
+        const getValue = (val) => {
+            if (!val) return 'Unknown';
+            if (typeof val === 'string') return val;
+            if (val.en_US) return val.en_US;
+            if (val.name) return val.name;
+            return Object.values(val)[0] || 'Unknown';
+        };
+        
+        const faction = getValue(char.faction).toLowerCase().replace(/\s+/g, '');
+        const charClass = getValue(char.class).toLowerCase().replace(/\s+/g, '');
+        
+        // Format professions if available - just show names in sidebar
+        const professionText = char.professions && char.professions.length > 0 
+            ? char.professions.map(p => p.name).join(', ')
+            : '';
+        
         return `
-        <div class="character-item faction-${factionName.toLowerCase()}" 
-             onclick="selectCharacter(${JSON.stringify(char).replace(/"/g, '&quot;')})"
+        <div class="character-item faction-${faction}" 
+             data-character='${JSON.stringify(char).replace(/'/g, '&apos;')}'
              data-char-id="${char.id}">
-            <div class="character-name ${char.class.toLowerCase().replace(' ', '')}">${char.name}</div>
+            <div class="character-name ${charClass}">${char.name}</div>
             <div class="character-meta">
-                ${char.level} ${char.race} ${char.class}
-                <br>${char.realm}
+                ${char.level} ${getValue(char.race)} ${getValue(char.class)}
+                <br>${getValue(char.realm)}
                 ${char.averageItemLevel ? `• ilvl ${char.averageItemLevel}` : ''}
+                ${professionText ? `<br><small style="color: #999; font-size: 0.75rem;">${professionText}</small>` : ''}
             </div>
         </div>
     `}).join('');
+    
+    // Add click event listeners to all character items
+    document.querySelectorAll('.character-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const characterData = JSON.parse(this.getAttribute('data-character'));
+            selectCharacter(characterData);
+        });
+    });
 }
 
 // Select and display character details
@@ -243,6 +267,18 @@ document.addEventListener('DOMContentLoaded', () => {
             saveNotes();
         }, 2000); // Auto-save after 2 seconds of no typing
     });
+    
+    
+    // Add event listeners when DOM is loaded
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+    
+    const saveBtn = document.querySelector('.save-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', saveNotes);
+    }
     
     // Check auth on load
     checkAuth();

@@ -29,31 +29,31 @@
             </div>
             
             <div id="character-detail" class="character-detail" style="display:none">
-    <div class="character-header">
-        <h1 id="char-name"></h1>
-        <div class="character-info">
-            <span id="char-level"></span>
-            <span id="char-class"></span>
-            <span id="char-race"></span>
-            <span id="char-realm"></span>
-            <span id="char-ilvl"></span>
-        </div>
-    </div>
-    
-    <div class="notes-section">
-        <h2>Character Notes</h2>
-        <textarea id="notes-area" placeholder="Add notes for this character..."></textarea>
-        <button onclick="saveNotes()" class="save-btn">Save Notes</button>
-        <div id="save-status" class="save-status"></div>
-    </div>
-    
-    <div class="professions-section" id="professions-section" style="display:none">
-        <h2>Professions</h2>
-        <div id="professions-detail" class="professions-detail">
-            <!-- Profession details will be populated here -->
-        </div>
+                <div class="character-header">
+                    <h1 id="char-name"></h1>
+                    <div class="character-info">
+                        <span id="char-level"></span>
+                        <span id="char-class"></span>
+                        <span id="char-race"></span>
+                        <span id="char-realm"></span>
+                        <span id="char-ilvl"></span>
+                    </div>
+                </div>
+                
+                <div class="notes-section">
+                    <h2>Character Notes</h2>
+                    <textarea id="notes-area" placeholder="Add notes for this character..."></textarea>
+                    <button class="save-btn">Save Notes</button>
+                    <div id="save-status" class="save-status"></div>
+                </div>
+
+		<div class="professions-section" id="professions-section" style="display:none">
+    <h2>Professions</h2>
+    <div id="professions-detail" class="professions-detail">
+        <!-- Profession details will be populated here -->
     </div>
 </div>
+            </div>
         </main>
     </div>
     
@@ -118,7 +118,40 @@ body {
     background: #0090d0;
 }
 
-#logout-btn {
+.btn-logout {
+    width: 100%;
+    padding: 10px;
+    background: #666;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.3s;
+    margin-top: 10px;
+}
+
+.btn-logout:hover {
+    background: #888;
+}
+
+.dashboard-link {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, #00ff88, #00d068);
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    transition: all 0.3s;
+}
+
+.dashboard-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+}
     background: #666;
     margin-top: 10px;
 }
