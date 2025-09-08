@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WoW Character Manager</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Warband Tracker - Character Manager</title>
 </head>
 <body>
     <div class="app-container">
@@ -12,20 +11,19 @@
             <div class="sidebar-header">
                 <h2>My Characters</h2>
                 <div id="auth-controls">
-                    <button id="login-btn" onclick="login()">Login with Battle.net</button>
-                    <button id="logout-btn" onclick="logout()" style="display:none">Logout</button>
+                    <a href="/" class="dashboard-link">← Back to Dashboard</a>
+                    <button id="logout-btn" class="btn-logout">Logout</button>
                 </div>
             </div>
             <div id="character-list" class="character-list">
-                <div class="loading">Not logged in</div>
+                <div class="loading">Loading characters...</div>
             </div>
         </aside>
         
         <main class="main-content">
-            <div id="welcome-screen" class="welcome-screen">
+            <div id="welcome-screen" class="welcome-screen" style="display:none">
                 <h1>WoW Character Manager</h1>
-                <p>Login with Battle.net to view your characters and manage notes!</p>
-                <button onclick="login()" class="big-login-btn">Connect Battle.net Account</button>
+                <p>Select a character from the sidebar to view details</p>
             </div>
             
             <div id="character-detail" class="character-detail" style="display:none">
@@ -46,22 +44,20 @@
                     <button class="save-btn">Save Notes</button>
                     <div id="save-status" class="save-status"></div>
                 </div>
-
-		<div class="professions-section" id="professions-section" style="display:none">
-    <h2>Professions</h2>
-    <div id="professions-detail" class="professions-detail">
-        <!-- Profession details will be populated here -->
-    </div>
-</div>
+                
+                <div class="professions-section" id="professions-section" style="display:none">
+                    <h2>Professions</h2>
+                    <div id="professions-detail" class="professions-detail">
+                        <!-- Profession details will be populated here -->
+                    </div>
+                </div>
             </div>
         </main>
     </div>
     
-    <script src="app.js?v=2"></script>
-</body>
-</html>
+    <script src="app.js?v=3"></script>
 
-<style>
+    <style>
 * {
     margin: 0;
     padding: 0;
@@ -102,20 +98,27 @@ body {
     font-size: 1.2rem;
 }
 
-#auth-controls button {
-    width: 100%;
-    padding: 10px;
-    background: #00aeff;
-    color: white;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background 0.3s;
+#auth-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-#auth-controls button:hover {
-    background: #0090d0;
+.dashboard-link {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    background: linear-gradient(135deg, #00ff88, #00d068);
+    color: white;
+    text-align: center;
+    text-decoration: none;
+    border-radius: 5px;
+    transition: all 0.3s;
+}
+
+.dashboard-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
 }
 
 .btn-logout {
@@ -128,35 +131,9 @@ body {
     cursor: pointer;
     font-size: 14px;
     transition: background 0.3s;
-    margin-top: 10px;
 }
 
 .btn-logout:hover {
-    background: #888;
-}
-
-.dashboard-link {
-    display: block;
-    width: 100%;
-    padding: 10px;
-    background: linear-gradient(135deg, #00ff88, #00d068);
-    color: white;
-    text-align: center;
-    text-decoration: none;
-    border-radius: 5px;
-    margin-bottom: 10px;
-    transition: all 0.3s;
-}
-
-.dashboard-link:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
-}
-    background: #666;
-    margin-top: 10px;
-}
-
-#logout-btn:hover {
     background: #888;
 }
 
@@ -220,23 +197,6 @@ body {
 .welcome-screen p {
     font-size: 1.2rem;
     color: #aaa;
-    margin-bottom: 30px;
-}
-
-.big-login-btn {
-    padding: 15px 40px;
-    font-size: 1.1rem;
-    background: linear-gradient(135deg, #00aeff, #0090d0);
-    color: white;
-    border: none;
-    border-radius: 30px;
-    cursor: pointer;
-    transition: transform 0.3s, box-shadow 0.3s;
-}
-
-.big-login-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(0, 174, 255, 0.3);
 }
 
 .character-detail {
@@ -270,6 +230,10 @@ body {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 20px;
     font-size: 0.9rem;
+}
+
+.notes-section {
+    margin-bottom: 30px;
 }
 
 .notes-section h2 {
@@ -337,21 +301,7 @@ body {
     color: #666;
 }
 
-/* Class-specific colors */
-.warrior { color: #C79C6E; }
-.paladin { color: #F58CBA; }
-.hunter { color: #ABD473; }
-.rogue { color: #FFF569; }
-.priest { color: #FFFFFF; }
-.deathknight { color: #C41F3B; }
-.shaman { color: #0070DE; }
-.mage { color: #69CCF0; }
-.warlock { color: #9482C9; }
-.monk { color: #00FF96; }
-.druid { color: #FF7D0A; }
-.demonhunter { color: #A330C9; }
-.evoker { color: #33937F; }
-
+/* Professions Section */
 .professions-section {
     margin-top: 30px;
     padding-top: 20px;
@@ -420,7 +370,42 @@ body {
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
 }
 
+/* Class colors */
+.warrior { color: #C79C6E; }
+.paladin { color: #F58CBA; }
+.hunter { color: #ABD473; }
+.rogue { color: #FFF569; }
+.priest { color: #FFFFFF; }
+.deathknight { color: #C41F3B; }
+.shaman { color: #0070DE; }
+.mage { color: #69CCF0; }
+.warlock { color: #9482C9; }
+.monk { color: #00FF96; }
+.druid { color: #FF7D0A; }
+.demonhunter { color: #A330C9; }
+.evoker { color: #33937F; }
+
 /* Faction colors */
 .faction-alliance { border-left: 3px solid #0078FF; }
 .faction-horde { border-left: 3px solid #B30000; }
-</style>
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 174, 255, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 174, 255, 0.5);
+}
+    </style>
+</body>
+</html>

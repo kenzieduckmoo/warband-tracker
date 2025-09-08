@@ -11,25 +11,17 @@ async function checkAuth() {
         console.log('Auth status response:', data);
         
         if (data.authenticated) {
-            console.log('User is authenticated, hiding login button');
-            document.getElementById('login-btn').style.display = 'none';
-            document.getElementById('logout-btn').style.display = 'block';
-            document.getElementById('welcome-screen').style.display = 'none';
+            console.log('User is authenticated');
+            // Just load characters, no need to show/hide elements
             loadCharacters();
         } else {
-            console.log('User is NOT authenticated, showing login button');
-            document.getElementById('login-btn').style.display = 'block';
-            document.getElementById('logout-btn').style.display = 'none';
-            document.getElementById('welcome-screen').style.display = 'block';
-            document.getElementById('character-detail').style.display = 'none';
-            document.getElementById('character-list').innerHTML = '<div class="loading">Please login to view characters</div>';
+            console.log('User is NOT authenticated, redirecting to login');
+            window.location.href = '/';
         }
     } catch (error) {
         console.error('Auth check failed:', error);
-        // Default to not authenticated if check fails
-        document.getElementById('login-btn').style.display = 'block';
-        document.getElementById('logout-btn').style.display = 'none';
-        document.getElementById('welcome-screen').style.display = 'block';
+        // Redirect to login on error
+        window.location.href = '/';
     }
 }
 
