@@ -6,9 +6,17 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const path = require('path');
+const fs = require('fs'); // Add this import
 require('dotenv').config();
 
-// Import multi-user database module
+// Create data directory if it doesn't exist - ADD THIS BEFORE DATABASE IMPORT
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    console.log('📁 Created data directory:', dataDir);
+}
+
+// Import multi-user database module AFTER ensuring directory exists
 const database = require('./database-multiuser');
 
 const app = express();
@@ -422,23 +430,6 @@ app.get('/api/characters-cached', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Failed to get characters from cache' });
     }
 });
-
-// Serve different pages based on auth status
-app.get('/', requireAuthRedirect, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
-app.get('/characters', requireAuthRedirect, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Middleware to redirect to login if not authenticated
-function requireAuthRedirect(req, res, next) {
-    if (!req.session.userId || !req.session.accessToken) {
-        return res.sendFile(path.join(__dirname, 'public', 'login.html'));
-    }
-    next();
-}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
