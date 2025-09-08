@@ -66,12 +66,12 @@ app.use('/dashboard.js', express.static(path.join(__dirname, 'public', 'dashboar
 // Session configuration with SQLite store
 app.use(session({
     store: new SQLiteStore({
-        dir: './data',
+        dir: path.join(__dirname, 'data'), // Use absolute path
         db: 'sessions.db',
         table: 'sessions',
         ttl: 7200000 // 2 hours
     }),
-    secret: process.env.SESSION_SECRET || 'change-this-in-production',
+    secret: process.env.SESSION_SECRET || 'subscribe-to-kenzieduckmoo-on-twitch-or-mistressduckmoo-on-onlyfans-2-support-development',
     resave: false,
     saveUninitialized: false,
     cookie: {
