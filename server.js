@@ -6,23 +6,22 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const path = require('path');
-const fs = require('fs'); // Add this import
+const fs = require('fs');
 require('dotenv').config();
 
-// Create data directory if it doesn't exist - ADD THIS BEFORE DATABASE IMPORT
+// Create data directory if it doesn't exist
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
     console.log('📁 Created data directory:', dataDir);
 }
 
-// Import multi-user database module AFTER ensuring directory exists
 const database = require('./database-multiuser');
 
 const app = express();
+app.set('trust proxy', 1); // ADD THIS LINE - trust first proxy
 const PORT = process.env.PORT || 3000;
 const isDevelopment = process.env.NODE_ENV === 'development';
-
 // Security middleware
 app.use(helmet({
     contentSecurityPolicy: {
@@ -64,7 +63,7 @@ app.use('/dashboard.css', express.static(path.join(__dirname, 'public', 'dashboa
 app.use('/dashboard.js', express.static(path.join(__dirname, 'public', 'dashboard.js')));
 
 // Session configuration with SQLite store
-app.use(session({
+ app.use(session({
     store: new SQLiteStore({
         dir: path.join(__dirname, 'data'), // Use absolute path
         db: 'sessions.db',
