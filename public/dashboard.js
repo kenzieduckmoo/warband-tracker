@@ -22,10 +22,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Display user info
     document.getElementById('user-tag').textContent = authData.battlenetTag || 'Player';
     
+    // Load current region
+    await loadCurrentRegion();
+    
     // Set up event listeners
     document.getElementById('refresh-btn').addEventListener('click', refreshAllData);
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('update-recipe-cache-btn').addEventListener('click', updateRecipeCache);
+    document.getElementById('region-select').addEventListener('change', handleRegionChange);
     
     // Set up faction tabs
     document.querySelectorAll('.faction-tab').forEach(tab => {
@@ -731,4 +735,96 @@ function setupFilterButtons() {
             applyLevelFilter(filter);
         });
     });
+}
+
+// Load current user region
+async function loadCurrentRegion() {
+    try {
+        const response = await fetch('/api/user-region');
+        const data = await response.json();
+        
+        if (data.region) {
+            document.getElementById('region-select').value = data.region;
+        }
+    } catch (error) {
+        console.error('Failed to load user region:', error);
+        // Default to US if unable to load
+        document.getElementById('region-select').value = 'us';
+    }
+}
+
+// Handle region change
+async function handleRegionChange(event) {
+    const newRegion = event.target.value;
+    const regionSelect = event.target;
+    
+    // Show loading state
+    regionSelect.disabled = true;
+    const originalText = regionSelect.options[regionSelect.selectedIndex].text;
+    regionSelect.options[regionSelect.selectedIndex].text = 'Switching...';
+    
+    try {
+        const response = await fetch('/api/user-region', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ region: newRegion })
+        });
+        
+        if (response.ok) {
+            // Show success message
+            showSuccess(`Region switched to ${newRegion.toUpperCase()}! Please refresh your character data to see ${newRegion === 'us' ? 'NA/OCE' : 'EU'} characters.`);
+            
+            // Optionally auto-refresh data
+            const shouldRefresh = confirm('Would you like to refresh your character data now to load characters from the new region?');
+            if (shouldRefresh) {
+                await refreshAllData();
+            }
+        } else {
+            throw new Error('Failed to update region');
+        }
+    } catch (error) {
+        console.error('Failed to update region:', error);
+        showError('Failed to switch region. Please try again.');
+        
+        // Revert selection
+        await loadCurrentRegion();
+    } finally {
+        // Reset button state
+        regionSelect.disabled = false;
+        regionSelect.options[regionSelect.selectedIndex].text = originalText;
+    }
+}
+
+// Show success message
+function showSuccess(message) {
+    // Create or update success element
+    let successEl = document.querySelector('.success-message');
+    if (!successEl) {
+        successEl = document.createElement('div');
+        successEl.className = 'success-message';
+        successEl.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            padding: 12px 20px;
+            z-index: 1000;
+            font-size: 14px;
+            max-width: 400px;
+        `;
+        document.body.appendChild(successEl);
+    }
+    
+    successEl.textContent = message;
+    successEl.style.display = 'block';
+    
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        successEl.style.display = 'none';
+    }, 5000);
 }

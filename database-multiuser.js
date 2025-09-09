@@ -15,10 +15,18 @@ function initDatabase() {
                 battlenet_id TEXT UNIQUE NOT NULL,
                 battlenet_tag TEXT,
                 email TEXT,
+                region TEXT DEFAULT 'us',
                 last_login DATETIME DEFAULT CURRENT_TIMESTAMP,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )`, (err) => {
                 if (err) console.error('Error creating users table:', err);
+                
+                // Migrate existing users table to add region column
+                db.run(`ALTER TABLE users ADD COLUMN region TEXT DEFAULT 'us'`, (err) => {
+                    if (err && !err.message.includes('duplicate column name')) {
+                        console.log('Region column already exists or other error:', err.message);
+                    }
+                });
             });
 
             // Characters table with user association
@@ -695,6 +703,34 @@ const dbHelpers = {
                     resolve();
                 }
             });
+        });
+    },
+
+    // Update user region
+    updateUserRegion: function(userId, region) {
+        return new Promise((resolve, reject) => {
+            db.run(
+                `UPDATE users SET region = ? WHERE id = ?`,
+                [region, userId],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve({ changes: this.changes });
+                }
+            );
+        });
+    },
+
+    // Get user region
+    getUserRegion: function(userId) {
+        return new Promise((resolve, reject) => {
+            db.get(
+                `SELECT region FROM users WHERE id = ?`,
+                [userId],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row?.region || 'us');
+                }
+            );
         });
     },
 

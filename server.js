@@ -202,14 +202,14 @@ async function updateRecipeCache() {
 let clientCredentialsToken = null;
 let clientCredentialsExpiry = 0;
 
-async function getClientCredentialsToken() {
+async function getClientCredentialsToken(region = 'us') {
     if (clientCredentialsToken && Date.now() < clientCredentialsExpiry) {
         return clientCredentialsToken;
     }
     
     try {
         const response = await axios.post(
-            `https://${process.env.REGION}.battle.net/oauth/token`,
+            `https://${region}.battle.net/oauth/token`,
             new URLSearchParams({
                 grant_type: 'client_credentials'
             }),
@@ -248,6 +248,17 @@ function extractEnglishText(obj) {
     return 'Unknown';
 }
 
+// Helper function to get user's region for API calls
+async function getUserRegionForAPI(userId) {
+    try {
+        const region = await database.getUserRegion(userId);
+        return region || 'us';
+    } catch (error) {
+        console.error('Failed to get user region, defaulting to US:', error);
+        return 'us';
+    }
+}
+
 // Middleware to check authentication
 function requireAuth(req, res, next) {
     if (!req.session.userId || !req.session.accessToken) {
@@ -282,7 +293,7 @@ app.get('/auth/login', (req, res) => {
         ? process.env.BNET_REDIRECT_URI 
         : process.env.BNET_REDIRECT_URI_PROD || process.env.BNET_REDIRECT_URI;
     
-    const authUrl = `https://${process.env.REGION}.battle.net/oauth/authorize?` +
+    const authUrl = `https://us.battle.net/oauth/authorize?` +
         `client_id=${process.env.BNET_CLIENT_ID}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `response_type=code&` +
@@ -313,7 +324,7 @@ app.get('/auth/callback', async (req, res) => {
         
         // Exchange code for token
         const tokenResponse = await axios.post(
-            `https://${process.env.REGION}.battle.net/oauth/token`,
+            `https://us.battle.net/oauth/token`,
             new URLSearchParams({
                 grant_type: 'authorization_code',
                 code: code,
@@ -332,7 +343,7 @@ app.get('/auth/callback', async (req, res) => {
         
         // Get user info from Battle.net
         const userInfoResponse = await axios.get(
-            `https://${process.env.REGION}.battle.net/oauth/userinfo`,
+            `https://us.battle.net/oauth/userinfo`,
             {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
@@ -377,9 +388,12 @@ app.get('/api/auth/status', async (req, res) => {
     }
     
     try {
+        const userId = req.session.userId;
+        const userRegion = await getUserRegionForAPI(userId);
+        
         // Verify token is still valid
         await axios.get(
-            `https://${process.env.REGION}.api.blizzard.com/profile/user/wow?namespace=profile-${process.env.REGION}`,
+            `https://${userRegion}.api.blizzard.com/profile/user/wow?namespace=profile-${userRegion}`,
             {
                 headers: {
                     'Authorization': `Bearer ${req.session.accessToken}`
@@ -402,8 +416,11 @@ app.get('/api/characters', requireAuth, async (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     
     try {
+        const userId = req.session.userId;
+        const userRegion = await getUserRegionForAPI(userId);
+        
         const profileResponse = await axios.get(
-            `https://${process.env.REGION}.api.blizzard.com/profile/user/wow?namespace=profile-${process.env.REGION}`,
+            `https://${userRegion}.api.blizzard.com/profile/user/wow?namespace=profile-${userRegion}`,
             {
                 headers: {
                     'Authorization': `Bearer ${req.session.accessToken}`
@@ -412,7 +429,6 @@ app.get('/api/characters', requireAuth, async (req, res) => {
         );
         
         const characters = [];
-        const userId = req.session.userId;
         
         for (const account of profileResponse.data.wow_accounts) {
             for (const char of account.characters) {
@@ -420,7 +436,7 @@ app.get('/api/characters', requireAuth, async (req, res) => {
                     try {
                         // Get character details
                         const charDetails = await axios.get(
-                            `https://${process.env.REGION}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}?namespace=profile-${process.env.REGION}`,
+                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}?namespace=profile-${userRegion}`,
                             {
                                 headers: {
                                     'Authorization': `Bearer ${req.session.accessToken}`
@@ -432,7 +448,7 @@ app.get('/api/characters', requireAuth, async (req, res) => {
                         let titleData = null;
                         try {
                             const titlesResponse = await axios.get(
-                                `https://${process.env.REGION}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/titles?namespace=profile-${process.env.REGION}`,
+                                `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/titles?namespace=profile-${userRegion}`,
                                 {
                                     headers: {
                                         'Authorization': `Bearer ${req.session.accessToken}`
@@ -454,7 +470,7 @@ app.get('/api/characters', requireAuth, async (req, res) => {
                         let professions = [];
                         try {
                             const professionsResponse = await axios.get(
-                                `https://${process.env.REGION}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/professions?namespace=profile-${process.env.REGION}`,
+                                `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
                                 {
                                     headers: {
                                         'Authorization': `Bearer ${req.session.accessToken}`
@@ -634,6 +650,33 @@ app.get('/api/character-professions/:characterId', requireAuth, async (req, res)
     }
 });
 
+// Update user region
+app.post('/api/user-region', requireAuth, async (req, res) => {
+    try {
+        const { region } = req.body;
+        if (!['us', 'eu'].includes(region)) {
+            return res.status(400).json({ error: 'Invalid region. Must be "us" or "eu".' });
+        }
+        
+        await database.updateUserRegion(req.session.userId, region);
+        res.json({ success: true, region });
+    } catch (error) {
+        console.error('Update region error:', error);
+        res.status(500).json({ error: 'Failed to update region' });
+    }
+});
+
+// Get user region
+app.get('/api/user-region', requireAuth, async (req, res) => {
+    try {
+        const region = await database.getUserRegion(req.session.userId);
+        res.json({ region });
+    } catch (error) {
+        console.error('Get region error:', error);
+        res.status(500).json({ error: 'Failed to get region' });
+    }
+});
+
 // Class/race/faction combinations - user-scoped
 app.get('/api/combinations', requireAuth, async (req, res) => {
     try {
@@ -661,6 +704,9 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
     try {
         console.log(`Starting recipe cache update for user ${req.session.userId}...`);
         
+        const userId = req.session.userId;
+        const userRegion = await getUserRegionForAPI(userId);
+        
         // Note: Recipe cache will be updated incrementally
         
         const results = {
@@ -678,7 +724,7 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
             try {
                 // Get character professions from API
                 const professionsResponse = await axios.get(
-                    `https://${process.env.REGION}.api.blizzard.com/profile/wow/character/${character.realm.toLowerCase().replace(' ', '')}/${character.name.toLowerCase()}/professions?namespace=profile-${process.env.REGION}`,
+                    `https://${userRegion}.api.blizzard.com/profile/wow/character/${character.realm.toLowerCase().replace(' ', '')}/${character.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
                     {
                         headers: {
                             'Authorization': `Bearer ${req.session.accessToken}`
@@ -705,10 +751,10 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
                                     // Get recipes for this profession tier from Game Data API
                                     try {
                                         const recipesResponse = await axios.get(
-                                            `https://${process.env.REGION}.api.blizzard.com/data/wow/profession/${professionId}/skill-tier/${tierId}?namespace=static-${process.env.REGION}`,
+                                            `https://${userRegion}.api.blizzard.com/data/wow/profession/${professionId}/skill-tier/${tierId}?namespace=static-${userRegion}`,
                                             {
                                                 headers: {
-                                                    'Authorization': `Bearer ${await getClientCredentialsToken()}`
+                                                    'Authorization': `Bearer ${await getClientCredentialsToken(userRegion)}`
                                                 }
                                             }
                                         );
@@ -952,23 +998,26 @@ app.get('/api/recipe-cache-status', async (req, res) => {
 });
 
 // WoW Token price endpoint
-app.get('/api/wow-token', async (req, res) => {
+app.get('/api/wow-token', requireAuth, async (req, res) => {
     try {
-        // Cache token price for 30 minutes
-        const cacheKey = 'wow_token_price';
+        const userId = req.session.userId;
+        const userRegion = await getUserRegionForAPI(userId);
+        
+        // Cache token price for 30 minutes per region
+        const cacheKey = `wow_token_price_${userRegion}`;
         
         // Check if we have cached data (simple in-memory cache for now)
-        if (app.locals.tokenCache && 
-            app.locals.tokenCacheTime && 
-            Date.now() - app.locals.tokenCacheTime < 30 * 60 * 1000) {
-            return res.json(app.locals.tokenCache);
+        if (app.locals[cacheKey] && 
+            app.locals[`${cacheKey}_time`] && 
+            Date.now() - app.locals[`${cacheKey}_time`] < 30 * 60 * 1000) {
+            return res.json(app.locals[cacheKey]);
         }
         
         const tokenResponse = await axios.get(
-            `https://${process.env.REGION}.api.blizzard.com/data/wow/token/?namespace=dynamic-${process.env.REGION}`,
+            `https://${userRegion}.api.blizzard.com/data/wow/token/?namespace=dynamic-${userRegion}`,
             {
                 headers: {
-                    'Authorization': `Bearer ${await getClientCredentialsToken()}`
+                    'Authorization': `Bearer ${await getClientCredentialsToken(userRegion)}`
                 }
             }
         );
@@ -979,8 +1028,8 @@ app.get('/api/wow-token', async (req, res) => {
         };
         
         // Cache the result
-        app.locals.tokenCache = tokenData;
-        app.locals.tokenCacheTime = Date.now();
+        app.locals[cacheKey] = tokenData;
+        app.locals[`${cacheKey}_time`] = Date.now();
         
         res.json(tokenData);
     } catch (error) {

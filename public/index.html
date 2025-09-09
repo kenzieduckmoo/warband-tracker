@@ -11,6 +11,13 @@
             <div class="sidebar-header">
                 <h2>My Characters</h2>
                 <div id="auth-controls">
+                    <div class="region-selector">
+                        <label for="region-select">Region:</label>
+                        <select id="region-select" class="region-select">
+                            <option value="us">NA/OCE</option>
+                            <option value="eu">EU</option>
+                        </select>
+                    </div>
                     <a href="/" class="dashboard-link">← Back to Dashboard</a>
                     <button id="logout-btn" class="btn-logout">Logout</button>
                 </div>
@@ -102,6 +109,42 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+.region-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.region-selector label {
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.region-select {
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #e0e0e0;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    flex: 1;
+}
+
+.region-select:hover {
+    border-color: #00aeff;
+    box-shadow: 0 0 8px rgba(0, 174, 255, 0.3);
+}
+
+.region-select:focus {
+    outline: none;
+    border-color: #00aeff;
+    box-shadow: 0 0 12px rgba(0, 174, 255, 0.4);
 }
 
 .dashboard-link {

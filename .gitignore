@@ -42,6 +42,7 @@ build/
 # Testing
 coverage/
 .nyc_output/
+.claude/
 
 # Temporary files
 temp/

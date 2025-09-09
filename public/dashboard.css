@@ -55,6 +55,40 @@ body {
     font-weight: bold;
 }
 
+.region-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.region-selector label {
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.region-select {
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #e0e0e0;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.region-select:hover {
+    border-color: #00aeff;
+    box-shadow: 0 0 8px rgba(0, 174, 255, 0.3);
+}
+
+.region-select:focus {
+    outline: none;
+    border-color: #00aeff;
+    box-shadow: 0 0 12px rgba(0, 174, 255, 0.4);
+}
+
 .btn-refresh, .btn-logout, .btn-link, .header-info .btn-update-cache {
     padding: 8px 16px;
     border: none;

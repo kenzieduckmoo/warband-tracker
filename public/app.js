@@ -363,6 +363,13 @@ document.addEventListener('DOMContentLoaded', () => {
         saveBtn.addEventListener('click', saveNotes);
     }
     
+    const regionSelect = document.getElementById('region-select');
+    if (regionSelect) {
+        regionSelect.addEventListener('change', handleRegionChange);
+        // Load current region
+        loadCurrentRegion();
+    }
+    
     // Check auth on load
     checkAuth();
 });
@@ -374,6 +381,60 @@ function login() {
 
 function logout() {
     window.location.href = '/auth/logout';
+}
+
+// Region functions
+async function loadCurrentRegion() {
+    try {
+        const response = await fetch('/api/user-region');
+        const data = await response.json();
+        
+        if (data.region) {
+            document.getElementById('region-select').value = data.region;
+        }
+    } catch (error) {
+        console.error('Failed to load user region:', error);
+        // Default to US if unable to load
+        document.getElementById('region-select').value = 'us';
+    }
+}
+
+async function handleRegionChange(event) {
+    const newRegion = event.target.value;
+    const regionSelect = event.target;
+    
+    // Show loading state
+    regionSelect.disabled = true;
+    const originalText = regionSelect.options[regionSelect.selectedIndex].text;
+    regionSelect.options[regionSelect.selectedIndex].text = 'Switching...';
+    
+    try {
+        const response = await fetch('/api/user-region', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ region: newRegion })
+        });
+        
+        if (response.ok) {
+            // Show success message and reload characters
+            alert(`Region switched to ${newRegion.toUpperCase()}! Loading characters from the new region...`);
+            loadCharacters(); // Reload characters from new region
+        } else {
+            throw new Error('Failed to update region');
+        }
+    } catch (error) {
+        console.error('Failed to update region:', error);
+        alert('Failed to switch region. Please try again.');
+        
+        // Revert selection
+        await loadCurrentRegion();
+    } finally {
+        // Reset button state
+        regionSelect.disabled = false;
+        regionSelect.options[regionSelect.selectedIndex].text = originalText;
+    }
 }
 
 // Handle errors in URL params
