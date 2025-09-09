@@ -11,10 +11,11 @@
         <!-- Header -->
         <header class="dashboard-header">
             <div class="header-content">
-                <h1>WoW Character Dashboard</h1>
+                <h1>Warband Tracker - Dashboard</h1>
                 <div class="header-info">
                     <span id="user-tag" class="user-tag"></span>
                     <button id="refresh-btn" class="btn-refresh">🔄 Refresh Data</button>
+                    <button id="update-recipe-cache-btn" class="btn-update-cache">🔄 Update Recipe Cache</button>
                     <a href="/characters" class="btn-link">Character Manager</a>
                     <button id="logout-btn" class="btn-logout">Logout</button>
                 </div>
@@ -40,6 +41,11 @@
                 <div class="stat-card">
                     <div class="stat-value" id="total-professions">0</div>
                     <div class="stat-label">Total Professions</div>
+                </div>
+                <div class="stat-card wow-token-card">
+                    <div class="stat-value" id="token-price">-</div>
+                    <div class="stat-label">WoW Token Price (Gold)</div>
+                    <div class="token-updated" id="token-updated"></div>
                 </div>
             </section>
 
@@ -85,6 +91,14 @@
                     </div>
                 </section>
 
+                <!-- Missing Profession Coverage -->
+                <section class="dashboard-card missing-coverage-card">
+                    <h2>Missing Profession Coverage</h2>
+                    <div id="missing-coverage" class="missing-coverage-grid">
+                        <!-- Missing profession tiers will be populated here -->
+                    </div>
+                </section>
+
                 <!-- Character List Summary -->
                 <section class="dashboard-card characters-card">
                     <h2>Top Characters by Item Level</h2>
@@ -104,6 +118,6 @@
         </main>
     </div>
 
-    <script src="dashboard.js"></script>
+    <script src="dashboard.js?v=20250909-csp-fix"></script>
 </body>
 </html>

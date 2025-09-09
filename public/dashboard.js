@@ -3,6 +3,8 @@ let charactersData = [];
 let professionsData = [];
 let combinationsData = [];
 let notesData = {};
+let tokenData = null;
+let missingCoverageData = [];
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Set up event listeners
     document.getElementById('refresh-btn').addEventListener('click', refreshAllData);
     document.getElementById('logout-btn').addEventListener('click', logout);
+    document.getElementById('update-recipe-cache-btn').addEventListener('click', updateRecipeCache);
     
     // Set up faction tabs
     document.querySelectorAll('.faction-tab').forEach(tab => {
@@ -42,39 +45,100 @@ async function loadDashboardData() {
         showLoadingState();
         
         // Load data in parallel
-        const [charactersRes, professionsRes, combinationsRes] = await Promise.all([
+        const [charactersRes, professionsRes, combinationsRes, tokenRes, missingCoverageRes, notesRes] = await Promise.all([
             fetch('/api/characters-cached'),
-            fetch('/api/professions-summary'),
-            fetch('/api/combinations')
+            fetch('/api/enhanced-professions-summary'),
+            fetch('/api/combinations'),
+            fetch('/api/wow-token'),
+            fetch('/api/missing-profession-coverage'),
+            fetch('/api/notes-all')
         ]);
         
         charactersData = await charactersRes.json();
         professionsData = await professionsRes.json();
         combinationsData = await combinationsRes.json();
+        tokenData = await tokenRes.json();
+        missingCoverageData = await missingCoverageRes.json();
+        notesData = await notesRes.json();
         
-        // Load notes for each character
-        for (const char of charactersData) {
-            try {
-                const notesRes = await fetch(`/api/notes/${char.id}`);
-                const notesJson = await notesRes.json();
-                if (notesJson.notes) {
-                    notesData[char.id] = notesJson.notes;
-                }
-            } catch (err) {
-                console.error(`Failed to load notes for ${char.name}:`, err);
-            }
-        }
-        
-// Render all dashboard sections
+        // Render all dashboard sections
         renderStats();
-        renderCoverage();  // <- This line needs to be changed
+        renderWoWToken();
+        renderCoverage();
         renderProfessions();
+        renderMissingCoverage();
         renderTopCharacters();
         renderRecentNotes();        
     } catch (error) {
         console.error('Failed to load dashboard data:', error);
         showError('Failed to load dashboard data. Please try refreshing.');
     }
+}
+
+// Update recipe cache and character known recipes
+async function updateRecipeCache() {
+    const updateBtn = document.getElementById('update-recipe-cache-btn');
+    updateBtn.innerHTML = '<span class="loading-spinner"></span> Updating Cache...';
+    updateBtn.disabled = true;
+    
+    try {
+        // Call the recipe cache update endpoint
+        const response = await fetch('/api/update-recipe-cache', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Recipe cache update result:', result);
+            
+            // Show success message
+            showSuccessMessage('Recipe cache updated successfully!');
+            
+            // Reload dashboard data to show updated missing coverage
+            await loadDashboardData();
+        } else {
+            throw new Error('Failed to update recipe cache');
+        }
+    } catch (error) {
+        console.error('Failed to update recipe cache:', error);
+        showError('Failed to update recipe cache. Please try again.');
+    } finally {
+        updateBtn.innerHTML = '🔄 Update Recipe Cache';
+        updateBtn.disabled = false;
+    }
+}
+
+// Show success message
+function showSuccessMessage(message) {
+    // Create a temporary success notification
+    const notification = document.createElement('div');
+    notification.className = 'success-notification';
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(0, 255, 136, 0.2);
+        color: #00ff88;
+        padding: 12px 20px;
+        border-radius: 8px;
+        border: 1px solid #00ff88;
+        z-index: 1000;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
 }
 
 // Refresh all data from Battle.net API
@@ -260,15 +324,21 @@ function renderProfessions() {
             professionGroups[prof.profession_name] = {
                 name: prof.profession_name,
                 tiers: [],
-                totalCharacters: new Set(),
-                maxedCount: 0
+                totalCharacters: new Set()
             };
         }
+        
+        // Check if we have enhanced data (recipe completion) or basic data
+        const hasRecipeData = prof.total_recipes_available !== undefined;
         
         professionGroups[prof.profession_name].tiers.push({
             tier: prof.tier_name,
             characters: prof.character_list,
-            maxed: prof.maxed_characters
+            totalRecipes: prof.total_recipes_available || 0,
+            knownRecipes: prof.total_recipes_known || 0,
+            completionPercentage: prof.completion_percentage || 0,
+            maxed: prof.maxed_characters || 0,
+            hasRecipeData: hasRecipeData
         });
         
         // Parse character list to count unique characters
@@ -278,29 +348,151 @@ function renderProfessions() {
                 professionGroups[prof.profession_name].totalCharacters.add(charName);
             });
         }
-        
-        professionGroups[prof.profession_name].maxedCount += prof.maxed_characters || 0;
     });
     
     // Render professions
     let html = '';
     Object.values(professionGroups).forEach(prof => {
-        html += `
-            <div class="profession-item">
-                <div class="profession-header">
-                    <span class="profession-name">${prof.name}</span>
-                    <span class="profession-count">${prof.totalCharacters.size} chars</span>
+        // Check if any tier has recipe data
+        const hasAnyRecipeData = prof.tiers.some(tier => tier.hasRecipeData);
+        
+        if (hasAnyRecipeData) {
+            // Enhanced view with recipe completion
+            const totalAvailable = prof.tiers.reduce((sum, tier) => sum + tier.totalRecipes, 0);
+            const totalKnown = prof.tiers.reduce((sum, tier) => sum + tier.knownRecipes, 0);
+            const overallCompletion = totalAvailable > 0 ? Math.round((totalKnown / totalAvailable) * 100) : 0;
+            
+            html += `
+                <div class="profession-item">
+                    <div class="profession-header">
+                        <span class="profession-name">${prof.name}</span>
+                        <span class="profession-count">${prof.totalCharacters.size} chars</span>
+                    </div>
+                    <div class="profession-completion">
+                        <div class="completion-bar">
+                            <div class="completion-fill" style="width: ${overallCompletion}%"></div>
+                        </div>
+                        <span class="completion-text">${totalKnown}/${totalAvailable} recipes (${overallCompletion}%)</span>
+                    </div>
+                    <div class="expansion-breakdown">
+                        ${prof.tiers.map(tier => {
+                            const completionClass = tier.completionPercentage >= 90 ? 'high' : 
+                                                  tier.completionPercentage >= 50 ? 'medium' : 'low';
+                            return `<span class="expansion-tag ${completionClass}" title="${tier.characters || 'None'}">
+                                ${tier.tier}: ${tier.knownRecipes}/${tier.totalRecipes} (${tier.completionPercentage}%)
+                            </span>`;
+                        }).join('')}
+                    </div>
                 </div>
-                <div class="expansion-breakdown">
-                    ${prof.tiers.map(tier => 
-                        `<span class="expansion-tag" title="${tier.characters || 'None'}">${tier.tier}: ${tier.maxed || 0} maxed</span>`
-                    ).join('')}
+            `;
+        } else {
+            // Basic view without recipe data
+            html += `
+                <div class="profession-item">
+                    <div class="profession-header">
+                        <span class="profession-name">${prof.name}</span>
+                        <span class="profession-count">${prof.totalCharacters.size} chars</span>
+                    </div>
+                    <div class="expansion-breakdown">
+                        ${prof.tiers.map(tier => 
+                            `<span class="expansion-tag" title="${tier.characters || 'None'}">${tier.tier}: ${tier.maxed || 0} maxed</span>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    container.innerHTML = html || '<div class="no-data">No profession data available</div>';
+}
+
+// Render missing profession coverage
+function renderMissingCoverage() {
+    const container = document.getElementById('missing-coverage');
+    if (!container) return; // Exit if container doesn't exist yet
+    
+    if (!missingCoverageData || missingCoverageData.length === 0) {
+        container.innerHTML = '<div class="no-data">Great! You have coverage for all available profession tiers.</div>';
+        return;
+    }
+    
+    // Debug logging removed - functionality working correctly
+    
+    // Group missing coverage by profession
+    const missingGroups = {};
+    missingCoverageData.forEach(missing => {
+        if (!missingGroups[missing.profession_name]) {
+            missingGroups[missing.profession_name] = [];
+        }
+        missingGroups[missing.profession_name].push(missing);
+    });
+    
+    let html = '';
+    Object.entries(missingGroups).forEach(([professionName, tiers]) => {
+        html += `
+            <div class="missing-profession-group">
+                <div class="missing-profession-header">
+                    <span class="missing-profession-name">${professionName}</span>
+                    <span class="missing-count">${tiers.length} missing</span>
+                </div>
+                <div class="missing-tiers">
+                    ${tiers.map((tier, tierIndex) => {
+                        // Get the missing recipes count
+                        const recipeCount = tier.missing_recipes || 0;
+                        const tierKey = `${professionName.replace(/\s+/g, '-').toLowerCase()}-${tier.tier_name.replace(/\s+/g, '-').toLowerCase()}`;
+                        
+                        // Parse missing recipes
+                        const recipeNames = tier.missing_recipe_names ? tier.missing_recipe_names.split(',') : [];
+                        const recipeIds = tier.missing_recipe_ids ? tier.missing_recipe_ids.split(',') : [];
+                        
+                        return `
+                            <div class="missing-tier-container">
+                                <span class="missing-tier-tag clickable" data-tier-key="${tierKey}" title="${recipeCount} missing recipes">
+                                    ${tier.tier_name} (${recipeCount} missing) <span class="expand-indicator">▼</span>
+                                </span>
+                                <div class="missing-recipe-list" id="missing-recipes-${tierKey}" style="display: none;">
+                                    ${recipeNames.map((recipeName, index) => {
+                                        const recipeId = recipeIds[index];
+                                        const cleanRecipeName = recipeName.trim();
+                                        return `
+                                            <div class="missing-recipe-item">
+                                                <a href="https://www.wowhead.com/spell=${recipeId}" target="_blank" class="recipe-link">
+                                                    ${cleanRecipeName}
+                                                </a>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;
     });
     
-    container.innerHTML = html || '<div class="no-data">No profession data available</div>';
+    container.innerHTML = html;
+    
+    // Add event listeners for missing tier expansion
+    container.querySelectorAll('.missing-tier-tag.clickable').forEach(tierTag => {
+        tierTag.addEventListener('click', function() {
+            const tierKey = this.getAttribute('data-tier-key');
+            const recipeList = document.getElementById(`missing-recipes-${tierKey}`);
+            const expandIndicator = this.querySelector('.expand-indicator');
+            
+            if (recipeList && expandIndicator) {
+                if (recipeList.style.display === 'none') {
+                    recipeList.style.display = 'block';
+                    expandIndicator.textContent = '▲';
+                    this.classList.add('expanded');
+                } else {
+                    recipeList.style.display = 'none';
+                    expandIndicator.textContent = '▼';
+                    this.classList.remove('expanded');
+                }
+            }
+        });
+    });
 }
 
 // Render top characters by item level
@@ -384,12 +576,51 @@ function getClassColor(className) {
     return colors[className] || '#888';
 }
 
+// Render WoW Token price
+function renderWoWToken() {
+    if (!tokenData) {
+        document.getElementById('token-price').textContent = 'Error';
+        document.getElementById('token-updated').textContent = 'Failed to load';
+        return;
+    }
+    
+    // Format price with commas
+    const formattedPrice = (tokenData.price / 10000).toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+    });
+    
+    document.getElementById('token-price').textContent = formattedPrice;
+    
+    // Format last updated time
+    if (tokenData.lastUpdated) {
+        const lastUpdated = new Date(tokenData.lastUpdated);
+        const timeAgo = getTimeAgo(lastUpdated);
+        document.getElementById('token-updated').textContent = `Updated ${timeAgo}`;
+    }
+}
+
+// Helper function to get "time ago" string
+function getTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+}
+
 // Show loading state
 function showLoadingState() {
     document.getElementById('total-characters').innerHTML = '<span class="loading-spinner"></span>';
     document.getElementById('max-level-chars').innerHTML = '<span class="loading-spinner"></span>';
     document.getElementById('avg-ilvl').innerHTML = '<span class="loading-spinner"></span>';
     document.getElementById('total-professions').innerHTML = '<span class="loading-spinner"></span>';
+    document.getElementById('token-price').innerHTML = '<span class="loading-spinner"></span>';
 }
 
 // Show error message
@@ -411,3 +642,5 @@ window.toggleCoverageItem = function(itemId) {
         item.classList.toggle('expanded');
     }
 }
+
+// Removed toggleMissingRecipes - now using event listeners to avoid CSP issues

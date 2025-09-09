@@ -55,7 +55,7 @@ body {
     font-weight: bold;
 }
 
-.btn-refresh, .btn-logout, .btn-link {
+.btn-refresh, .btn-logout, .btn-link, .header-info .btn-update-cache {
     padding: 8px 16px;
     border: none;
     border-radius: 6px;
@@ -84,7 +84,7 @@ body {
     border: 1px solid #ff453a;
 }
 
-.btn-refresh:hover, .btn-link:hover, .btn-logout:hover {
+.btn-refresh:hover, .btn-link:hover, .btn-logout:hover, .header-info .btn-update-cache:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 174, 255, 0.3);
 }
@@ -128,6 +128,144 @@ body {
     font-size: 0.9rem;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+/* WoW Token Card */
+.wow-token-card {
+    position: relative;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(0, 0, 0, 0.6));
+}
+
+.wow-token-card:hover {
+    border-color: #ffd700;
+    box-shadow: 0 8px 24px rgba(255, 215, 0, 0.3);
+}
+
+.wow-token-card .stat-value {
+    background: linear-gradient(135deg, #ffd700, #ffef94);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 2rem;
+}
+
+.token-updated {
+    margin-top: 4px;
+    color: #aaa;
+    font-size: 0.75rem;
+    font-style: italic;
+}
+
+/* Missing Coverage Styles */
+.missing-coverage-card {
+    border: 1px solid rgba(255, 69, 58, 0.2);
+    background: linear-gradient(135deg, rgba(255, 69, 58, 0.05), rgba(0, 0, 0, 0.6));
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(0, 174, 255, 0.3);
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #f0f0f0;
+}
+
+.btn-update-cache {
+    padding: 8px 16px;
+    background: rgba(255, 174, 0, 0.2);
+    color: #ffae00;
+    border: 1px solid #ffae00;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.btn-update-cache:hover {
+    background: rgba(255, 174, 0, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 174, 0, 0.3);
+}
+
+.btn-update-cache:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.missing-coverage-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.missing-profession-group {
+    background: rgba(255, 69, 58, 0.1);
+    border: 1px solid rgba(255, 69, 58, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    transition: all 0.3s;
+}
+
+.missing-profession-group:hover {
+    background: rgba(255, 69, 58, 0.15);
+    border-color: rgba(255, 69, 58, 0.4);
+}
+
+.missing-profession-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.missing-profession-name {
+    font-weight: bold;
+    color: #ff6b6b;
+    font-size: 1rem;
+}
+
+.missing-count {
+    background: rgba(255, 69, 58, 0.3);
+    color: #ff453a;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: bold;
+}
+
+.missing-tiers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.missing-tier-tag {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 69, 58, 0.3);
+    color: #ff9999;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.missing-tier-tag:hover {
+    background: rgba(255, 69, 58, 0.2);
+    border-color: rgba(255, 69, 58, 0.5);
+    color: #ffaaaa;
 }
 
 /* Dashboard Grid */
@@ -432,6 +570,30 @@ body {
     margin-bottom: 8px;
 }
 
+.profession-completion {
+    margin-bottom: 12px;
+}
+
+.completion-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.completion-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff453a, #ffae00, #00ff88);
+    transition: width 0.3s ease;
+}
+
+.completion-text {
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
 .profession-name {
     font-weight: bold;
     color: #00aeff;
@@ -463,6 +625,91 @@ body {
     border-radius: 4px;
     font-size: 0.75rem;
     color: #888;
+    border: 1px solid transparent;
+}
+
+.expansion-tag.high {
+    background: rgba(0, 255, 136, 0.2);
+    color: #00ff88;
+    border-color: rgba(0, 255, 136, 0.3);
+}
+
+.expansion-tag.medium {
+    background: rgba(255, 174, 0, 0.2);
+    color: #ffae00;
+    border-color: rgba(255, 174, 0, 0.3);
+}
+
+.expansion-tag.low {
+    background: rgba(255, 69, 58, 0.2);
+    color: #ff453a;
+    border-color: rgba(255, 69, 58, 0.3);
+}
+
+/* Missing Coverage Styles */
+.missing-coverage-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.missing-profession-group {
+    background: rgba(255, 69, 58, 0.1);
+    border: 1px solid rgba(255, 69, 58, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    transition: all 0.3s;
+}
+
+.missing-profession-group:hover {
+    background: rgba(255, 69, 58, 0.15);
+    border-color: rgba(255, 69, 58, 0.4);
+}
+
+.missing-profession-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.missing-profession-name {
+    font-weight: bold;
+    color: #ff6b6b;
+    font-size: 1rem;
+}
+
+.missing-count {
+    background: rgba(255, 69, 58, 0.3);
+    color: #ff453a;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: bold;
+}
+
+.missing-tiers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.missing-tier-tag {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 69, 58, 0.3);
+    color: #ff9999;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.missing-tier-tag:hover {
+    background: rgba(255, 69, 58, 0.2);
+    border-color: rgba(255, 69, 58, 0.5);
+    color: #ffaaaa;
 }
 
 /* Character List */
@@ -599,5 +846,81 @@ body {
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+/* Missing Recipe Expandable Lists */
+.missing-tier-container {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 4px;
+}
+
+.missing-tier-tag.clickable {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.missing-tier-tag.clickable:hover {
+    background: rgba(255, 69, 58, 0.3);
+    transform: translateY(-1px);
+}
+
+.missing-tier-tag.expanded {
+    background: rgba(255, 69, 58, 0.2);
+    border-color: rgba(255, 69, 58, 0.6);
+}
+
+.expand-indicator {
+    font-size: 0.8em;
+    transition: transform 0.2s ease;
+    margin-left: 5px;
+}
+
+.missing-recipe-list {
+    margin-top: 8px;
+    margin-left: 15px;
+    padding: 8px 0;
+    border-left: 2px solid rgba(255, 69, 58, 0.3);
+    padding-left: 12px;
+    animation: slideDown 0.2s ease-out;
+}
+
+.missing-recipe-item {
+    margin-bottom: 4px;
+    padding: 2px 0;
+}
+
+.recipe-link {
+    color: #ffd700;
+    text-decoration: none;
+    font-size: 0.9em;
+    transition: color 0.2s ease;
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.recipe-link:hover {
+    color: #fff;
+    background: rgba(255, 215, 0, 0.2);
+    text-decoration: none;
+    transform: translateX(2px);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        transform: translateY(0);
+    }
 }
 </style>

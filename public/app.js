@@ -1,4 +1,36 @@
-let characters = [];
+// Helper function to guess title position based on common WoW title patterns
+function guessTitlePosition(titleName, characterName) {
+    if (!titleName) return characterName;
+    
+    // Titles that typically go after the name (start with "the" or "of")
+    const afterNamePatterns = [
+        /^the /i,           // "the Seeker", "the Kingslayer", etc.
+        /^of /i,            // "of the Nightfall", "of the Iron Vanguard", etc.
+        /'s /i,             // "Hellscream's Downfall", "Destroyer's End", etc.
+        /End$/i,            // "Storm's End", "Defiler's End", etc.
+        /slayer$/i,         // "Titanslayer", "Kingslayer", etc.
+        /breaker$/i,        // "Hordebreaker", "Breaker of Chains", etc.
+        /Incarnate$/i,      // "Vengeance Incarnate"
+        /Vanquisher$/i,     // "Twilight Vanquisher"
+        /Downfall$/i        // "Hellscream's Downfall"
+    ];
+    
+    // Check if title should go after the name
+    const shouldGoAfter = afterNamePatterns.some(pattern => pattern.test(titleName));
+    
+    if (shouldGoAfter) {
+        return `${characterName} ${titleName}`;
+    } else {
+        // Default to before the name for titles like "Firelord", "Prelate", "Artisan", etc.
+        return `${titleName} ${characterName}`;
+    }
+}
+
+// Dashboard data
+let charactersData = [];
+let professionsData = [];
+let combinationsData = [];
+let notesData = {};
 let currentCharacter = null;
 let saveTimeout = null;
 
@@ -31,7 +63,7 @@ async function loadCharacters() {
     charList.innerHTML = '<div class="loading">Loading characters...</div>';
     
     try {
-        const response = await fetch('/api/characters');
+        const response = await fetch('/api/characters-cached');
         if (!response.ok) {
             if (response.status === 401) {
                 // Token expired or invalid, need to re-login
@@ -45,13 +77,13 @@ async function loadCharacters() {
             throw new Error('Failed to fetch characters');
         }
         
-        characters = await response.json();
-        console.log('Loaded characters:', characters); // Debug log to see what we got
+        charactersData = await response.json();
+        console.log('Loaded characters:', charactersData); // Debug log to see what we got
         displayCharacters();
         
         // Auto-select first character if available
-        if (characters.length > 0) {
-            selectCharacter(characters[0]);
+        if (charactersData.length > 0) {
+            selectCharacter(charactersData[0]);
         }
     } catch (error) {
         console.error('Failed to load characters:', error);
@@ -67,28 +99,17 @@ async function loadCharacters() {
 function displayCharacters() {
     const charList = document.getElementById('character-list');
     
-    if (characters.length === 0) {
+    if (charactersData.length === 0) {
         charList.innerHTML = '<div class="loading">No level 70+ characters found</div>';
         return;
     }
     
-    charList.innerHTML = characters.map(char => {
-        // Extract value if it's a localized object
-        const getValue = (val) => {
-            if (!val) return 'Unknown';
-            if (typeof val === 'string') return val;
-            if (val.en_US) return val.en_US;
-            if (val.name) return val.name;
-            return Object.values(val)[0] || 'Unknown';
-        };
+    charList.innerHTML = charactersData.map(char => {
+        const faction = char.faction ? char.faction.toLowerCase().replace(/\s+/g, '') : 'unknown';
+        const charClass = char.class ? char.class.toLowerCase().replace(/\s+/g, '') : 'unknown';
         
-        const faction = getValue(char.faction).toLowerCase().replace(/\s+/g, '');
-        const charClass = getValue(char.class).toLowerCase().replace(/\s+/g, '');
-        
-        // Format professions if available - just show names in sidebar
-        const professionText = char.professions && char.professions.length > 0 
-            ? char.professions.map(p => p.name).join(', ')
-            : '';
+        // Format professions if available - use professions_list from cached data
+        const professionText = char.professions_list || '';
         
         return `
         <div class="character-item faction-${faction}" 
@@ -96,9 +117,9 @@ function displayCharacters() {
              data-char-id="${char.id}">
             <div class="character-name ${charClass}">${char.name}</div>
             <div class="character-meta">
-                ${char.level} ${getValue(char.race)} ${getValue(char.class)}
-                <br>${getValue(char.realm)}
-                ${char.averageItemLevel ? `• ilvl ${char.averageItemLevel}` : ''}
+                ${char.level} ${char.race} ${char.active_spec ? char.active_spec + ' ' : ''}${char.class}
+                <br>${char.realm}${char.guild ? ` - <${char.guild}>` : ''}
+                ${char.average_item_level ? `• ilvl ${char.average_item_level}` : ''}
                 ${professionText ? `<br><small style="color: #999; font-size: 0.75rem;">${professionText}</small>` : ''}
             </div>
         </div>
@@ -130,78 +151,148 @@ async function selectCharacter(character) {
     document.getElementById('character-detail').style.display = 'block';
     
     // Populate character details
-    document.getElementById('char-name').textContent = character.name;
+    let characterName = character.name;
+    
+    // Parse title data - it's stored as JSON string in the database
+    let titleData = null;
+    if (character.title) {
+        try {
+            titleData = typeof character.title === 'string' ? JSON.parse(character.title) : character.title;
+        } catch (e) {
+            // If parsing fails, treat as plain string
+            titleData = character.title;
+        }
+    }
+    
+    if (titleData) {
+        if (typeof titleData === 'string') {
+            // Old format - title is just a string, guess positioning based on title content
+            characterName = guessTitlePosition(titleData, character.name);
+        } else if (titleData.display_string && typeof titleData.display_string === 'string') {
+            // New format - use the display_string which has {name} as a placeholder
+            characterName = titleData.display_string.replace('{name}', character.name);
+        } else if (titleData.name) {
+            // Fallback - guess positioning based on title content
+            characterName = guessTitlePosition(titleData.name, character.name);
+        }
+    }
+    
+    document.getElementById('char-name').textContent = characterName;
     document.getElementById('char-name').className = character.class.toLowerCase().replace(' ', '');
     document.getElementById('char-level').textContent = `Level ${character.level}`;
-    document.getElementById('char-class').textContent = character.class;
+    document.getElementById('char-class').textContent = character.active_spec 
+        ? `${character.active_spec} ${character.class}`
+        : character.class;
     document.getElementById('char-race').textContent = character.race;
-    document.getElementById('char-realm').textContent = character.realm;
+    document.getElementById('char-realm').textContent = character.guild 
+        ? `${character.realm} - <${character.guild}>`
+        : character.realm;
     
-    if (character.averageItemLevel) {
-        document.getElementById('char-ilvl').textContent = `ilvl ${character.averageItemLevel}/${character.equippedItemLevel}`;
+    if (character.average_item_level) {
+        document.getElementById('char-ilvl').textContent = `ilvl ${character.average_item_level}/${character.equipped_item_level || character.average_item_level}`;
         document.getElementById('char-ilvl').style.display = 'inline-block';
     } else {
         document.getElementById('char-ilvl').style.display = 'none';
     }
     
-    // Display professions section if character has professions
+    // Show covenant if available
+    const covenantInfo = document.getElementById('covenant-info');
+    if (character.covenant) {
+        if (!covenantInfo) {
+            // Create covenant element if it doesn't exist
+            const covenantDiv = document.createElement('div');
+            covenantDiv.id = 'covenant-info';
+            covenantDiv.className = 'character-covenant';
+            document.querySelector('.character-header').appendChild(covenantDiv);
+        }
+        document.getElementById('covenant-info').textContent = `Covenant: ${character.covenant}`;
+        document.getElementById('covenant-info').style.display = 'block';
+    } else if (covenantInfo) {
+        covenantInfo.style.display = 'none';
+    }
+    
+    // Load and display professions for this character
+    await loadCharacterProfessions(character.id);
+    
+    // Load notes for this character
+    await loadNotes(character.id);
+}
+
+// Load and display professions for a character
+async function loadCharacterProfessions(characterId) {
     const professionsSection = document.getElementById('professions-section');
     const professionsDetail = document.getElementById('professions-detail');
     
-    console.log('Professions section element:', professionsSection);
-    console.log('Professions detail element:', professionsDetail);
-    
-    if (character.professions && character.professions.length > 0) {
-        console.log('Showing professions section with', character.professions.length, 'professions');
+    try {
+        // Fetch character's profession data from the API
+        const response = await fetch(`/api/character-professions/${characterId}`);
+        
+        if (!response.ok) {
+            // If endpoint doesn't exist, hide the section
+            professionsSection.style.display = 'none';
+            return;
+        }
+        
+        const professionData = await response.json();
+        
+        if (!professionData || professionData.length === 0) {
+            professionsSection.style.display = 'none';
+            return;
+        }
+        
         professionsSection.style.display = 'block';
         
-        // Create profession cards with detailed tier info
-        professionsDetail.innerHTML = character.professions.map(prof => {
-            console.log('Processing profession:', prof.name, prof);
-            let tiersHTML = '';
+        // Group professions by name
+        const professionGroups = {};
+        professionData.forEach(prof => {
+            if (!professionGroups[prof.profession_name]) {
+                professionGroups[prof.profession_name] = {
+                    name: prof.profession_name,
+                    tiers: []
+                };
+            }
             
-            if (prof.tiers && prof.tiers.length > 0) {
-                tiersHTML = prof.tiers.map(tier => {
-                    const skillPercent = tier.maxSkill > 0 ? (tier.skillLevel / tier.maxSkill * 100) : 0;
-                    return `
-                        <div class="profession-tier">
-                            <div class="profession-tier-name">${tier.name}</div>
-                            <div class="profession-skill-bar">
-                                <div class="profession-skill-fill" style="width: ${skillPercent}%"></div>
-                                <div class="profession-skill-text">${tier.skillLevel} / ${tier.maxSkill}</div>
-                            </div>
-                            ${tier.recipes > 0 ? `<div style="margin-top: 4px; color: #888; font-size: 0.8rem;">${tier.recipes} recipes known</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                // Fallback for professions without tier data
-                const skillPercent = prof.maxSkill > 0 ? (prof.skillLevel / prof.maxSkill * 100) : 0;
-                tiersHTML = `
+            professionGroups[prof.profession_name].tiers.push({
+                name: prof.tier_name,
+                skillLevel: prof.skill_level,
+                maxSkill: prof.max_skill_level,
+                knownRecipes: prof.known_recipes || 0,
+                totalRecipes: prof.total_recipes || 0
+            });
+        });
+        
+        // Render profession cards
+        professionsDetail.innerHTML = Object.values(professionGroups).map(prof => {
+            const tiersHTML = prof.tiers.map(tier => {
+                const skillPercent = tier.maxSkill > 0 ? (tier.skillLevel / tier.maxSkill * 100) : 0;
+                const recipeInfo = tier.totalRecipes > 0 
+                    ? `${tier.knownRecipes}/${tier.totalRecipes} recipes` 
+                    : `${tier.knownRecipes} recipes`;
+                
+                return `
                     <div class="profession-tier">
+                        <div class="profession-tier-name">${tier.name}</div>
                         <div class="profession-skill-bar">
                             <div class="profession-skill-fill" style="width: ${skillPercent}%"></div>
-                            <div class="profession-skill-text">${prof.skillLevel} / ${prof.maxSkill}</div>
+                            <div class="profession-skill-text">${tier.skillLevel} / ${tier.maxSkill}</div>
                         </div>
+                        <div style="margin-top: 4px; color: #888; font-size: 0.8rem;">${recipeInfo}</div>
                     </div>
                 `;
-            }
+            }).join('');
             
             return `
                 <div class="profession-card">
                     <div class="profession-header">${prof.name}</div>
-                    ${prof.totalRecipes ? `<div style="color: #aaa; font-size: 0.9rem; margin-bottom: 10px;">Total recipes: ${prof.totalRecipes}</div>` : ''}
                     ${tiersHTML}
                 </div>
             `;
         }).join('');
-    } else {
-        console.log('No professions or empty array, hiding section');
+        
+    } catch (error) {
+        console.error('Failed to load character professions:', error);
         professionsSection.style.display = 'none';
     }
-    
-    // Load notes for this character
-    await loadNotes(character.id);
 }
 
 // Load notes for a character
