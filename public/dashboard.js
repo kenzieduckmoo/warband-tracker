@@ -454,9 +454,12 @@ function renderMissingCoverage() {
                                     ${recipeNames.map((recipeName, index) => {
                                         const recipeId = recipeIds[index];
                                         const cleanRecipeName = recipeName.trim();
+                                        // Create Wowhead search URL using recipe name for better results
+                                        const searchUrl = `https://www.wowhead.com/search?q=${encodeURIComponent(cleanRecipeName)}`;
+                                        
                                         return `
                                             <div class="missing-recipe-item">
-                                                <a href="https://www.wowhead.com/spell=${recipeId}" target="_blank" class="recipe-link">
+                                                <a href="${searchUrl}" target="_blank" class="recipe-link" title="Search Wowhead for: ${cleanRecipeName}">
                                                     ${cleanRecipeName}
                                                 </a>
                                             </div>
@@ -508,7 +511,7 @@ function renderTopCharacters() {
     topChars.forEach(char => {
         const classColor = getClassColor(char.class);
         html += `
-            <div class="character-summary" onclick="window.location.href='/characters#${char.id}'">
+            <div class="character-summary clickable-character" data-character-id="${char.id}">
                 <div class="character-ilvl">${char.average_item_level || '-'}</div>
                 <div class="character-details">
                     <div class="character-name-line" style="color: ${classColor}">${char.name}</div>
@@ -522,6 +525,14 @@ function renderTopCharacters() {
     });
     
     container.innerHTML = html || '<div class="no-data">No character data available</div>';
+    
+    // Add event listeners for character navigation
+    container.querySelectorAll('.clickable-character').forEach(element => {
+        element.addEventListener('click', function() {
+            const characterId = this.getAttribute('data-character-id');
+            window.location.href = `/characters#${characterId}`;
+        });
+    });
 }
 
 // Render recent notes
@@ -546,7 +557,7 @@ function renderRecentNotes() {
     charactersWithNotes.forEach(char => {
         const classColor = getClassColor(char.class);
         html += `
-            <div class="note-preview" onclick="window.location.href='/characters#${char.id}'">
+            <div class="note-preview clickable-character" data-character-id="${char.id}">
                 <div class="note-character" style="color: ${classColor}">${char.name}</div>
                 <div class="note-text">${char.notes}</div>
             </div>
@@ -554,6 +565,14 @@ function renderRecentNotes() {
     });
     
     container.innerHTML = html;
+    
+    // Add event listeners for character navigation
+    container.querySelectorAll('.clickable-character').forEach(element => {
+        element.addEventListener('click', function() {
+            const characterId = this.getAttribute('data-character-id');
+            window.location.href = `/characters#${characterId}`;
+        });
+    });
 }
 
 // Helper function to get class color
