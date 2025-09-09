@@ -22,6 +22,18 @@
             </div>
         </header>
 
+        <!-- Level Filter Controls -->
+        <div class="filter-controls">
+            <div class="filter-buttons">
+                <button id="filter-80s" class="filter-btn active" data-filter="80s">80s Only</button>
+                <button id="filter-70-80" class="filter-btn" data-filter="70-80">70-80</button>
+                <button id="filter-10-80" class="filter-btn" data-filter="10-80">10-80</button>
+            </div>
+            <div class="filter-info">
+                <span id="filter-description">Showing level 80 characters only</span>
+            </div>
+        </div>
+
         <!-- Main Dashboard Grid -->
         <main class="dashboard-main">
             <!-- Quick Stats Row -->
@@ -118,6 +130,6 @@
         </main>
     </div>
 
-    <script src="dashboard.js?v=20250909-csp-clean"></script>
+    <script src="dashboard.js?v=20250909-level-filters-fixed"></script>
 </body>
 </html>

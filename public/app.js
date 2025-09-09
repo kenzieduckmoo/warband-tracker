@@ -100,7 +100,7 @@ function displayCharacters() {
     const charList = document.getElementById('character-list');
     
     if (charactersData.length === 0) {
-        charList.innerHTML = '<div class="loading">No level 70+ characters found</div>';
+        charList.innerHTML = '<div class="loading">No level 10+ characters found</div>';
         return;
     }
     

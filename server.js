@@ -416,7 +416,7 @@ app.get('/api/characters', requireAuth, async (req, res) => {
         
         for (const account of profileResponse.data.wow_accounts) {
             for (const char of account.characters) {
-                if (char.level >= 70) {
+                if (char.level >= 10) {
                     try {
                         // Get character details
                         const charDetails = await axios.get(

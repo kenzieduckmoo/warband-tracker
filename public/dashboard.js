@@ -1,10 +1,12 @@
 // Dashboard data
 let charactersData = [];
+let allCharactersData = []; // Store unfiltered data
 let professionsData = [];
 let combinationsData = [];
 let notesData = {};
 let tokenData = null;
 let missingCoverageData = [];
+let currentFilter = '80s'; // Default filter
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', async () => {
@@ -54,12 +56,18 @@ async function loadDashboardData() {
             fetch('/api/notes-all')
         ]);
         
-        charactersData = await charactersRes.json();
+        allCharactersData = await charactersRes.json();
         professionsData = await professionsRes.json();
         combinationsData = await combinationsRes.json();
         tokenData = await tokenRes.json();
         missingCoverageData = await missingCoverageRes.json();
         notesData = await notesRes.json();
+        
+        // Apply default filter to characters
+        applyLevelFilter(currentFilter);
+        
+        // Set up filter buttons
+        setupFilterButtons();
         
         // Render all dashboard sections
         renderStats();
@@ -663,3 +671,64 @@ window.toggleCoverageItem = function(itemId) {
 }
 
 // Removed toggleMissingRecipes - now using event listeners to avoid CSP issues
+
+// Level filtering functions
+function applyLevelFilter(filter) {
+    currentFilter = filter;
+    
+    switch (filter) {
+        case '80s':
+            charactersData = allCharactersData.filter(char => char.level === 80);
+            break;
+        case '70-80':
+            charactersData = allCharactersData.filter(char => char.level >= 70 && char.level <= 80);
+            break;
+        case '10-80':
+            charactersData = allCharactersData.filter(char => char.level >= 10 && char.level <= 80);
+            break;
+        default:
+            charactersData = allCharactersData;
+    }
+    
+    // Update filter description
+    updateFilterDescription(filter);
+    
+    // Re-render affected sections
+    renderStats();
+    renderCoverage();
+    renderTopCharacters();
+    renderRecentNotes();
+}
+
+function updateFilterDescription(filter) {
+    const description = document.getElementById('filter-description');
+    if (!description) return;
+    
+    switch (filter) {
+        case '80s':
+            description.textContent = 'Showing level 80 characters only';
+            break;
+        case '70-80':
+            description.textContent = 'Showing characters level 70-80';
+            break;
+        case '10-80':
+            description.textContent = 'Showing all characters level 10-80';
+            break;
+    }
+}
+
+function setupFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Remove active class from all buttons
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            
+            // Add active class to clicked button
+            this.classList.add('active');
+            
+            // Apply the filter
+            const filter = this.getAttribute('data-filter');
+            applyLevelFilter(filter);
+        });
+    });
+}
