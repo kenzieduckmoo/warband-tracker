@@ -125,6 +125,43 @@
                 transform: scale(1.05);
             }
         }
+        
+        .region-selection {
+            margin-top: 20px;
+        }
+        
+        .region-label {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            color: #aaa;
+        }
+        
+        .region-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .region-btn {
+            background: linear-gradient(135deg, #00aeff, #0090d0);
+            padding: 15px 25px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 150px;
+            justify-content: center;
+        }
+        
+        .region-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 174, 255, 0.3);
+        }
+        
+        .region-flag {
+            font-size: 1.2rem;
+        }
     </style>
 </head>
 <body>
@@ -160,7 +197,19 @@
             </div>
         </div>
         
-        <a href="/auth/login" class="login-btn">Login with Battle.net</a>
+        <div class="region-selection">
+            <p class="region-label">Select your region:</p>
+            <div class="region-buttons">
+                <a href="/auth/login?region=us" class="login-btn region-btn">
+                    <span class="region-flag">🇺🇸</span>
+                    NA/OCE Region
+                </a>
+                <a href="/auth/login?region=eu" class="login-btn region-btn">
+                    <span class="region-flag">🇪🇺</span>
+                    EU Region
+                </a>
+            </div>
+        </div>
         
         <p class="security-note">
             🔒 Your data is private and secure. We only access your character information.

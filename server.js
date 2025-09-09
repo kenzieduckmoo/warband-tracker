@@ -286,14 +286,22 @@ app.get('/characters', requireAuthRedirect, (req, res) => {
 
 // OAuth endpoints
 app.get('/auth/login', (req, res) => {
+    const region = req.query.region || 'us'; // Default to US if no region specified
+    
+    // Validate region
+    if (!['us', 'eu'].includes(region)) {
+        return res.redirect('/?error=invalid_region');
+    }
+    
     const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     req.session.oauthState = state;
+    req.session.oauthRegion = region; // Store region for callback
     
     const redirectUri = isDevelopment 
         ? process.env.BNET_REDIRECT_URI 
         : process.env.BNET_REDIRECT_URI_PROD || process.env.BNET_REDIRECT_URI;
     
-    const authUrl = `https://us.battle.net/oauth/authorize?` +
+    const authUrl = `https://${region}.battle.net/oauth/authorize?` +
         `client_id=${process.env.BNET_CLIENT_ID}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `response_type=code&` +
@@ -315,16 +323,21 @@ app.get('/auth/callback', async (req, res) => {
         return res.redirect('/?error=no_code');
     }
     
+    // Get the region from session
+    const region = req.session.oauthRegion || 'us';
+    
+    // Clean up session variables
     delete req.session.oauthState;
+    delete req.session.oauthRegion;
     
     try {
         const redirectUri = isDevelopment 
             ? process.env.BNET_REDIRECT_URI 
             : process.env.BNET_REDIRECT_URI_PROD || process.env.BNET_REDIRECT_URI;
         
-        // Exchange code for token
+        // Exchange code for token using the same region as authorization
         const tokenResponse = await axios.post(
-            `https://us.battle.net/oauth/token`,
+            `https://${region}.battle.net/oauth/token`,
             new URLSearchParams({
                 grant_type: 'authorization_code',
                 code: code,
@@ -341,9 +354,9 @@ app.get('/auth/callback', async (req, res) => {
         
         const accessToken = tokenResponse.data.access_token;
         
-        // Get user info from Battle.net
+        // Get user info from Battle.net using the same region
         const userInfoResponse = await axios.get(
-            `https://us.battle.net/oauth/userinfo`,
+            `https://${region}.battle.net/oauth/userinfo`,
             {
                 headers: {
                     'Authorization': `Bearer ${accessToken}`
@@ -354,15 +367,21 @@ app.get('/auth/callback', async (req, res) => {
         const battlenetId = userInfoResponse.data.id;
         const battlenetTag = userInfoResponse.data.battletag;
         
-        // Find or create user in database
+        // Find or create user in database with their login region as default
         const user = await database.findOrCreateUser(battlenetId, battlenetTag);
+        
+        // Set the user's region to their login region if not already set
+        const currentUserRegion = await database.getUserRegion(user.id);
+        if (!currentUserRegion || currentUserRegion === 'us') {
+            await database.updateUserRegion(user.id, region);
+        }
         
         // Store user info in session
         req.session.userId = user.id;
         req.session.battlenetTag = user.battlenet_tag;
         req.session.accessToken = accessToken;
         
-        console.log(`User ${user.battlenet_tag} logged in successfully`);
+        console.log(`User ${user.battlenet_tag} logged in successfully from ${region.toUpperCase()} region`);
         res.redirect('/');
     } catch (error) {
         console.error('OAuth error:', error.response?.data || error.message);
