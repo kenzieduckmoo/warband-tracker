@@ -5,6 +5,77 @@ const bcrypt = require('bcryptjs');
 // Create or open database
 const db = new sqlite3.Database(path.join(__dirname, 'data', 'wow_characters.db'));
 
+// WoW expansion tier order mapping (oldest to newest)
+function getTierOrder(tierName) {
+    if (!tierName) return 999;
+    
+    const tierOrderMap = {
+        // Classic
+        'Classic': 0,
+        'Vanilla': 0,
+        
+        // Burning Crusade
+        'Outland': 1,
+        'The Burning Crusade': 1,
+        'TBC': 1,
+        
+        // Wrath of the Lich King
+        'Northrend': 2,
+        'Wrath of the Lich King': 2,
+        'WotLK': 2,
+        
+        // Cataclysm
+        'Cataclysm': 3,
+        
+        // Mists of Pandaria
+        'Pandaria': 4,
+        'Mists of Pandaria': 4,
+        'MoP': 4,
+        
+        // Warlords of Draenor
+        'Draenor': 5,
+        'Warlords of Draenor': 5,
+        'WoD': 5,
+        
+        // Legion
+        'Legion': 6,
+        'Broken Isles': 6,
+        
+        // Battle for Azeroth
+        'Battle for Azeroth': 7,
+        'BfA': 7,
+        'Kul Tiran': 7,
+        'Zandalari': 7,
+        
+        // Shadowlands
+        'Shadowlands': 8,
+        
+        // Dragonflight
+        'Dragon Isles': 9,
+        'Dragonflight': 9,
+        
+        // The War Within (current)
+        'Khaz Algar': 10,
+        'The War Within': 10
+    };
+    
+    // Check for exact matches first
+    if (tierOrderMap.hasOwnProperty(tierName)) {
+        return tierOrderMap[tierName];
+    }
+    
+    // Check for partial matches (case-insensitive)
+    const lowerTierName = tierName.toLowerCase();
+    for (const [key, value] of Object.entries(tierOrderMap)) {
+        if (lowerTierName.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerTierName)) {
+            return value;
+        }
+    }
+    
+    // If no match found, return a high number so it appears last
+    return 999;
+}
+
 // Initialize database schema with multi-user support
 function initDatabase() {
     return new Promise((resolve, reject) => {
@@ -381,8 +452,20 @@ const dbHelpers = {
                 GROUP BY p.profession_name, p.tier_name
                 ORDER BY p.profession_name, p.tier_name
             `, [userId], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
+                if (err) {
+                    reject(err);
+                } else {
+                    // Sort results by profession name and tier order (instead of alphabetical)
+                    const sortedRows = rows.sort((a, b) => {
+                        // First sort by profession name
+                        if (a.profession_name !== b.profession_name) {
+                            return a.profession_name.localeCompare(b.profession_name);
+                        }
+                        // Then sort by expansion tier order
+                        return getTierOrder(a.tier_name) - getTierOrder(b.tier_name);
+                    });
+                    resolve(sortedRows);
+                }
             });
         });
     },
@@ -556,8 +639,20 @@ const dbHelpers = {
                         AND ptr.tier_id = rs.tier_id
                     ORDER BY ptr.profession_name, ptr.tier_name
                 `, [userId, userId], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
+                    if (err) {
+                        reject(err);
+                    } else {
+                        // Sort results by profession name and tier order (instead of alphabetical)
+                        const sortedRows = rows.sort((a, b) => {
+                            // First sort by profession name
+                            if (a.profession_name !== b.profession_name) {
+                                return a.profession_name.localeCompare(b.profession_name);
+                            }
+                            // Then sort by expansion tier order
+                            return getTierOrder(a.tier_name) - getTierOrder(b.tier_name);
+                        });
+                        resolve(sortedRows);
+                    }
                 });
             });
         });
@@ -595,8 +690,20 @@ const dbHelpers = {
                     HAVING missing_recipes > 0
                     ORDER BY cr.profession_name, cr.tier_name
                 `, [userId], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
+                    if (err) {
+                        reject(err);
+                    } else {
+                        // Sort results by profession name and tier order (instead of alphabetical)
+                        const sortedRows = rows.sort((a, b) => {
+                            // First sort by profession name
+                            if (a.profession_name !== b.profession_name) {
+                                return a.profession_name.localeCompare(b.profession_name);
+                            }
+                            // Then sort by expansion tier order
+                            return getTierOrder(a.tier_name) - getTierOrder(b.tier_name);
+                        });
+                        resolve(sortedRows);
+                    }
                 });
             });
         });
@@ -756,8 +863,20 @@ const dbHelpers = {
                 GROUP BY p.profession_name, p.profession_id, p.tier_name, p.tier_id, p.skill_level, p.max_skill_level
                 ORDER BY p.profession_name, p.tier_name
             `, [userId, characterId], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
+                if (err) {
+                    reject(err);
+                } else {
+                    // Sort results by profession name and tier order (instead of alphabetical)
+                    const sortedRows = rows.sort((a, b) => {
+                        // First sort by profession name
+                        if (a.profession_name !== b.profession_name) {
+                            return a.profession_name.localeCompare(b.profession_name);
+                        }
+                        // Then sort by expansion tier order
+                        return getTierOrder(a.tier_name) - getTierOrder(b.tier_name);
+                    });
+                    resolve(sortedRows);
+                }
             });
         });
     }
