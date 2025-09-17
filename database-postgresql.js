@@ -464,8 +464,8 @@ const dbHelpers = {
                 SELECT
                     p.profession_name,
                     p.tier_name,
-                    COUNT(DISTINCT p.character_id) as total_characters,
-                    COUNT(CASE WHEN p.skill_level = p.max_skill_level THEN 1 END) as maxed_characters,
+                    COUNT(DISTINCT p.character_id)::integer as total_characters,
+                    COUNT(CASE WHEN p.skill_level = p.max_skill_level THEN 1 END)::integer as maxed_characters,
                     STRING_AGG(
                         c.name || ' (' || p.skill_level || '/' || p.max_skill_level || ')',
                         ', '
@@ -645,7 +645,7 @@ const dbHelpers = {
                         p.profession_id,
                         p.tier_name,
                         p.tier_id,
-                        COUNT(DISTINCT p.character_id) as total_characters,
+                        COUNT(DISTINCT p.character_id)::integer as total_characters,
                         STRING_AGG(
                             DISTINCT c.name || ' (' || p.skill_level || '/' || p.max_skill_level || ')', ', '
                         ) as character_list
@@ -667,8 +667,8 @@ const dbHelpers = {
                 )
                 SELECT
                     ptr.*,
-                    COALESCE(rs.total_recipes_available, 0) as total_recipes_available,
-                    COALESCE(rs.total_recipes_known, 0) as total_recipes_known,
+                    COALESCE(rs.total_recipes_available, 0)::integer as total_recipes_available,
+                    COALESCE(rs.total_recipes_known, 0)::integer as total_recipes_known,
                     CAST(ROUND(
                         CASE
                             WHEN COALESCE(rs.total_recipes_available, 0) > 0
@@ -717,7 +717,7 @@ const dbHelpers = {
                     cr.profession_id,
                     cr.tier_name,
                     cr.tier_id,
-                    COUNT(cr.recipe_id) as missing_recipes,
+                    COUNT(cr.recipe_id)::integer as missing_recipes,
                     STRING_AGG(cr.recipe_name, ', ') as missing_recipe_names,
                     STRING_AGG(cr.recipe_id::text, ', ') as missing_recipe_ids
                 FROM cached_recipes cr
@@ -897,8 +897,8 @@ const dbHelpers = {
                     p.tier_id,
                     p.skill_level,
                     p.max_skill_level,
-                    COUNT(DISTINCT cr.recipe_id) as total_recipes,
-                    COUNT(DISTINCT ckr.recipe_id) as known_recipes
+                    COUNT(DISTINCT cr.recipe_id)::integer as total_recipes,
+                    COUNT(DISTINCT ckr.recipe_id)::integer as known_recipes
                 FROM professions p
                 LEFT JOIN cached_recipes cr ON p.profession_id = cr.profession_id AND p.tier_id = cr.tier_id
                 LEFT JOIN character_known_recipes ckr ON p.character_id = ckr.character_id
