@@ -72,7 +72,8 @@ app.use('/footer.js', express.static(path.join(__dirname, 'public', 'footer.js')
     store: new pgSession({
         conString: process.env.DATABASE_URL,
         tableName: 'session',
-        ttl: 7200 // 2 hours in seconds
+        ttl: 7200, // 2 hours in seconds
+        createTableIfMissing: true
     }),
     secret: process.env.SESSION_SECRET || 'subscribe-to-kenzieduckmoo-on-twitch-or-mistressduckmoo-on-onlyfans-2-support-development',
     resave: false,
@@ -87,8 +88,8 @@ app.use('/footer.js', express.static(path.join(__dirname, 'public', 'footer.js')
 
 // Initialize database on startup
 database.initDatabase().then(() => {
-    console.log('📊 Multi-user database initialized successfully');
-    
+    console.log('📊 PostgreSQL database initialized successfully');
+
     // Check recipe cache status and update if needed
     checkAndUpdateRecipeCache();
     

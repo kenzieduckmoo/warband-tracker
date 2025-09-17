@@ -10,6 +10,15 @@ const pool = new Pool({
     connectionTimeoutMillis: 2000,
 });
 
+// Test connection and log any issues
+pool.on('connect', () => {
+    console.log('✅ Connected to PostgreSQL database');
+});
+
+pool.on('error', (err) => {
+    console.error('❌ PostgreSQL connection error:', err);
+});
+
 // WoW expansion tier order mapping (oldest to newest)
 function getTierOrder(tierName) {
     if (!tierName) return 999;
