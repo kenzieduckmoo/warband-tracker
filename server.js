@@ -70,11 +70,10 @@ app.use('/footer.js', express.static(path.join(__dirname, 'public', 'footer.js')
 // Session configuration with PostgreSQL store
  app.use(session({
     store: new pgSession({
-        conString: process.env.DATABASE_URL,
+        conString: process.env.DATABASE_URL + '?sslmode=require',
         tableName: 'session',
         ttl: 7200, // 2 hours in seconds
-        createTableIfMissing: true,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        createTableIfMissing: true
     }),
     secret: process.env.SESSION_SECRET || 'subscribe-to-kenzieduckmoo-on-twitch-or-mistressduckmoo-on-onlyfans-2-support-development',
     resave: false,
@@ -1071,7 +1070,7 @@ app.use((err, req, res, next) => {
 
 // Start server
 const server = app.listen(PORT, () => {
-    console.log(`✨ WoW Character Manager (Multi-User) running on http://localhost:${PORT}`);
+    console.log(`✨ WoW Character Manager (PostgreSQL) running on http://localhost:${PORT}`);
     console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`📁 Database: ${path.join(__dirname, 'data', 'wow_characters.db')}`);
     
