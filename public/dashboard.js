@@ -241,19 +241,7 @@ function renderCoverage() {
         uniqueCombos.add(`${char.race}-${char.class}-${char.faction}`);
     });
     
-    // Calculate theoretical maximum (approximate)
-    const possibleRaces = ['Human', 'Dwarf', 'Night Elf', 'Gnome', 'Draenei', 'Worgen', 'Pandaren', 
-                          'Void Elf', 'Lightforged Draenei', 'Dark Iron Dwarf', 'Kul Tiran', 'Mechagnome',
-                          'Orc', 'Undead', 'Tauren', 'Troll', 'Blood Elf', 'Goblin', 
-                          'Nightborne', 'Highmountain Tauren', 'Maghar Orc', 'Zandalari Troll', 'Vulpera'];
-    const possibleClasses = ['Warrior', 'Paladin', 'Hunter', 'Rogue', 'Priest', 'Death Knight', 
-                            'Shaman', 'Mage', 'Warlock', 'Monk', 'Druid', 'Demon Hunter', 'Evoker'];
-    
-    // Not all combos are valid, but let's use a rough estimate
-    const estimatedPossible = Math.floor((possibleRaces.length * possibleClasses.length) * 0.4); // ~40% are valid combos
-    const percentage = Math.round((uniqueCombos.size / estimatedPossible) * 100);
-    
-    document.getElementById('coverage-percentage').textContent = `${percentage}%`;
+    // Update coverage count
     document.getElementById('coverage-count').textContent = `${uniqueCombos.size}`;
 }
 
