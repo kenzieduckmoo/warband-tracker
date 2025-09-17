@@ -320,6 +320,17 @@ const dbHelpers = {
     upsertProfessionTier: async function(userId, characterId, professionName, professionId, tier) {
         const client = await pool.connect();
         try {
+            // First check if character exists
+            const charCheck = await client.query(
+                'SELECT id FROM characters WHERE id = $1 AND user_id = $2',
+                [characterId, userId]
+            );
+
+            if (charCheck.rows.length === 0) {
+                console.warn(`Character ${characterId} not found for user ${userId}, skipping profession ${professionName}`);
+                return;
+            }
+
             await client.query(`
                 INSERT INTO professions
                 (user_id, character_id, profession_name, profession_id, tier_name, tier_id,
@@ -658,13 +669,13 @@ const dbHelpers = {
                     ptr.*,
                     COALESCE(rs.total_recipes_available, 0) as total_recipes_available,
                     COALESCE(rs.total_recipes_known, 0) as total_recipes_known,
-                    ROUND(
+                    CAST(ROUND(
                         CASE
                             WHEN COALESCE(rs.total_recipes_available, 0) > 0
-                            THEN (COALESCE(rs.total_recipes_known, 0)::NUMERIC / rs.total_recipes_available) * 100
+                            THEN (CAST(COALESCE(rs.total_recipes_known, 0) AS DECIMAL) / rs.total_recipes_available) * 100
                             ELSE 0
-                        END::NUMERIC, 1
-                    ) as completion_percentage
+                        END, 1
+                    ) AS DECIMAL) as completion_percentage
                 FROM profession_tier_recipes ptr
                 LEFT JOIN recipe_stats rs ON ptr.profession_id = rs.profession_id
                     AND ptr.tier_id = rs.tier_id
