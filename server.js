@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+const pgSession = require('connect-pg-simple')(session);
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
@@ -16,7 +16,7 @@ if (!fs.existsSync(dataDir)) {
     console.log('📁 Created data directory:', dataDir);
 }
 
-const database = require('./database-multiuser');
+const database = require('./database-postgresql');
 
 const app = express();
 app.set('trust proxy', 1); // ADD THIS LINE - trust first proxy
@@ -65,14 +65,14 @@ app.use('/style.css', express.static(path.join(__dirname, 'public', 'style.css')
 app.use('/app.js', express.static(path.join(__dirname, 'public', 'app.js')));
 app.use('/dashboard.css', express.static(path.join(__dirname, 'public', 'dashboard.css')));
 app.use('/dashboard.js', express.static(path.join(__dirname, 'public', 'dashboard.js')));
+app.use('/footer.js', express.static(path.join(__dirname, 'public', 'footer.js')));
 
-// Session configuration with SQLite store
+// Session configuration with PostgreSQL store
  app.use(session({
-    store: new SQLiteStore({
-        dir: path.join(__dirname, 'data'), // Use absolute path
-        db: 'sessions.db',
-        table: 'sessions',
-        ttl: 7200000 // 2 hours
+    store: new pgSession({
+        conString: process.env.DATABASE_URL,
+        tableName: 'session',
+        ttl: 7200 // 2 hours in seconds
     }),
     secret: process.env.SESSION_SECRET || 'subscribe-to-kenzieduckmoo-on-twitch-or-mistressduckmoo-on-onlyfans-2-support-development',
     resave: false,
