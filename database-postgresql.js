@@ -661,9 +661,9 @@ const dbHelpers = {
                     ROUND(
                         CASE
                             WHEN COALESCE(rs.total_recipes_available, 0) > 0
-                            THEN (COALESCE(rs.total_recipes_known, 0)::FLOAT / rs.total_recipes_available) * 100
+                            THEN (COALESCE(rs.total_recipes_known, 0)::NUMERIC / rs.total_recipes_available) * 100
                             ELSE 0
-                        END, 1
+                        END::NUMERIC, 1
                     ) as completion_percentage
                 FROM profession_tier_recipes ptr
                 LEFT JOIN recipe_stats rs ON ptr.profession_id = rs.profession_id
