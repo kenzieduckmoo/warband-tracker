@@ -73,7 +73,8 @@ app.use('/footer.js', express.static(path.join(__dirname, 'public', 'footer.js')
         conString: process.env.DATABASE_URL,
         tableName: 'session',
         ttl: 7200, // 2 hours in seconds
-        createTableIfMissing: true
+        createTableIfMissing: true,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
     }),
     secret: process.env.SESSION_SECRET || 'subscribe-to-kenzieduckmoo-on-twitch-or-mistressduckmoo-on-onlyfans-2-support-development',
     resave: false,
@@ -1061,7 +1062,11 @@ app.get('/api/wow-token', requireAuth, async (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
+
+    // Only send response if headers haven't been sent yet
+    if (!res.headersSent) {
+        res.status(500).json({ error: 'Something went wrong!' });
+    }
 });
 
 // Start server
@@ -1078,12 +1083,15 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM signal received: closing HTTP server');
-    server.close(() => {
+    server.close(async () => {
         console.log('HTTP server closed');
-        database.db.close(() => {
+        try {
+            await database.pool.end();
             console.log('Database connection closed');
-            process.exit(0);
-        });
+        } catch (err) {
+            console.error('Error closing database:', err);
+        }
+        process.exit(0);
     });
 });
 
