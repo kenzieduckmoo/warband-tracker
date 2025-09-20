@@ -280,12 +280,25 @@ async function updateQuestCacheFromCompletedQuests() {
         console.log('Starting quest cache update from completed quests...');
 
         // Get all unique quest IDs from completed quests
-        const uniqueQuestIds = await database.pool.query(`
-            SELECT DISTINCT quest_id
-            FROM warband_completed_quests
-            WHERE quest_id NOT IN (SELECT quest_id FROM cached_quests)
-            ORDER BY quest_id
-        `);
+        const client = await database.pool.connect();
+        let uniqueQuestIds;
+        try {
+            uniqueQuestIds = await client.query(`
+                SELECT DISTINCT quest_id
+                FROM warband_completed_quests
+                WHERE quest_id NOT IN (SELECT quest_id FROM cached_quests)
+                ORDER BY quest_id
+            `);
+        } finally {
+            client.release();
+        }
+
+        if (uniqueQuestIds.rows.length === 0) {
+            console.log('No new quest IDs to cache');
+            return;
+        }
+
+        console.log(`Found ${uniqueQuestIds.rows.length} quest IDs to cache`);
 
         let totalQuestsCached = 0;
         const accessToken = await getClientCredentialsToken();
@@ -332,6 +345,11 @@ async function updateQuestCacheFromCompletedQuests() {
         }
 
         console.log(`Quest cache update complete! Cached ${totalQuestsCached} new quests.`);
+
+        // Update zone summaries for all users if new quests were cached
+        if (totalQuestsCached > 0) {
+            await updateAllUserZoneSummaries();
+        }
     } catch (error) {
         console.error('Failed to update quest cache:', error);
     }
@@ -354,6 +372,35 @@ function determineExpansionFromQuest(questDetails) {
     if (questId >= 5000) return 'The Burning Crusade';
 
     return 'Classic';
+}
+
+// Helper function to update zone summaries for all users
+async function updateAllUserZoneSummaries() {
+    try {
+        console.log('Updating zone summaries for all users...');
+
+        const client = await database.pool.connect();
+        let userIds;
+        try {
+            // Get all user IDs that have completed quests
+            userIds = await client.query('SELECT DISTINCT user_id FROM warband_completed_quests');
+        } finally {
+            client.release();
+        }
+
+        for (const userRow of userIds.rows) {
+            try {
+                await database.updateZoneQuestSummary(userRow.user_id);
+                console.log(`Updated zone summary for user ${userRow.user_id}`);
+            } catch (userError) {
+                console.error(`Failed to update zone summary for user ${userRow.user_id}:`, userError.message);
+            }
+        }
+
+        console.log(`Zone summary update complete for ${userIds.rows.length} users`);
+    } catch (error) {
+        console.error('Failed to update zone summaries for all users:', error);
+    }
 }
 
 // Helper function to get user's region for API calls
@@ -1208,6 +1255,18 @@ app.get('/api/quest-cache-status', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Quest cache status error:', error);
         res.status(500).json({ error: 'Failed to get quest cache status' });
+    }
+});
+
+// Debug endpoint to manually trigger quest cache update
+app.post('/api/update-quest-cache', requireAuth, async (req, res) => {
+    try {
+        console.log('Manual quest cache update triggered');
+        await updateQuestCacheFromCompletedQuests();
+        res.json({ success: true, message: 'Quest cache update completed' });
+    } catch (error) {
+        console.error('Manual quest cache update error:', error);
+        res.status(500).json({ error: 'Failed to update quest cache' });
     }
 });
 
