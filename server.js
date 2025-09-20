@@ -92,15 +92,23 @@ database.initDatabase().then(() => {
 
     // Check recipe cache status and update if needed
     checkAndUpdateRecipeCache();
-    
+
+    // Check quest cache status and update if needed
+    checkAndUpdateQuestCache();
+
     // Clean up expired sessions periodically
     setInterval(() => {
         database.cleanupSessions().catch(console.error);
     }, 3600000); // Every hour
-    
+
     // Check recipe cache weekly
     setInterval(() => {
         checkAndUpdateRecipeCache();
+    }, 7 * 24 * 60 * 60 * 1000); // Weekly
+
+    // Check quest cache weekly
+    setInterval(() => {
+        checkAndUpdateQuestCache();
     }, 7 * 24 * 60 * 60 * 1000); // Weekly
 }).catch(err => {
     console.error('Failed to initialize database:', err);
@@ -247,6 +255,105 @@ function extractEnglishText(obj) {
     if (obj.name && typeof obj.name === 'string') return obj.name;
     
     return 'Unknown';
+}
+
+// Function to check and update quest cache
+async function checkAndUpdateQuestCache() {
+    try {
+        const cacheStatus = await database.getQuestCacheStatus();
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+        if (!cacheStatus.last_cached || new Date(cacheStatus.last_cached) < oneWeekAgo) {
+            console.log('Quest cache is outdated or empty. Starting background update...');
+            await updateQuestCacheFromCompletedQuests();
+        } else {
+            console.log(`Quest cache is current. ${cacheStatus.total_quests} quests cached.`);
+        }
+    } catch (error) {
+        console.error('Failed to check quest cache status:', error);
+    }
+}
+
+// Background quest cache update function
+async function updateQuestCacheFromCompletedQuests() {
+    try {
+        console.log('Starting quest cache update from completed quests...');
+
+        // Get all unique quest IDs from completed quests
+        const uniqueQuestIds = await database.pool.query(`
+            SELECT DISTINCT quest_id
+            FROM warband_completed_quests
+            WHERE quest_id NOT IN (SELECT quest_id FROM cached_quests)
+            ORDER BY quest_id
+        `);
+
+        let totalQuestsCached = 0;
+        const accessToken = await getClientCredentialsToken();
+
+        // Process quests in batches to respect rate limits
+        const batchSize = 50; // Conservative batch size
+        const questIds = uniqueQuestIds.rows.map(row => row.quest_id);
+
+        for (let i = 0; i < questIds.length; i += batchSize) {
+            const batch = questIds.slice(i, i + batchSize);
+
+            for (const questId of batch) {
+                try {
+                    const questDetails = await fetchQuestDetails('us', questId, accessToken);
+
+                    if (questDetails) {
+                        // Extract zone and expansion info (with fallbacks)
+                        const zoneName = extractEnglishText(questDetails.area) || 'Unknown Zone';
+                        const expansionName = determineExpansionFromQuest(questDetails);
+                        const category = questDetails.category ? extractEnglishText(questDetails.category) : null;
+                        const isSeasonal = questDetails.id > 60000; // Rough heuristic for seasonal quests
+
+                        await database.cacheQuest(
+                            questDetails.id,
+                            extractEnglishText(questDetails),
+                            zoneName,
+                            expansionName,
+                            category,
+                            isSeasonal
+                        );
+
+                        totalQuestsCached++;
+                    }
+
+                    // Rate limiting - 50ms delay between requests (20 requests/second)
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                } catch (questError) {
+                    // Skip quest if API call fails (known issue with Battle.net API)
+                    console.log(`Skipped quest ${questId}: ${questError.message}`);
+                }
+            }
+
+            console.log(`Processed batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(questIds.length/batchSize)}`);
+        }
+
+        console.log(`Quest cache update complete! Cached ${totalQuestsCached} new quests.`);
+    } catch (error) {
+        console.error('Failed to update quest cache:', error);
+    }
+}
+
+// Helper function to determine expansion from quest data
+function determineExpansionFromQuest(questDetails) {
+    // This is a simplified mapping - in reality you'd need more sophisticated logic
+    const questId = questDetails.id;
+
+    if (questId >= 80000) return 'The War Within';
+    if (questId >= 70000) return 'Dragonflight';
+    if (questId >= 60000) return 'Shadowlands';
+    if (questId >= 50000) return 'Battle for Azeroth';
+    if (questId >= 40000) return 'Legion';
+    if (questId >= 30000) return 'Warlords of Draenor';
+    if (questId >= 25000) return 'Mists of Pandaria';
+    if (questId >= 20000) return 'Cataclysm';
+    if (questId >= 10000) return 'Wrath of the Lich King';
+    if (questId >= 5000) return 'The Burning Crusade';
+
+    return 'Classic';
 }
 
 // Helper function to get user's region for API calls
