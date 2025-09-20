@@ -6,6 +6,7 @@ let combinationsData = [];
 let notesData = {};
 let tokenData = null;
 let missingCoverageData = [];
+let questZonesData = [];
 let currentFilter = '80s'; // Default filter
 
 // Initialize dashboard
@@ -51,13 +52,14 @@ async function loadDashboardData() {
         showLoadingState();
         
         // Load data in parallel
-        const [charactersRes, professionsRes, combinationsRes, tokenRes, missingCoverageRes, notesRes] = await Promise.all([
+        const [charactersRes, professionsRes, combinationsRes, tokenRes, missingCoverageRes, notesRes, questZonesRes] = await Promise.all([
             fetch('/api/characters-cached'),
             fetch('/api/enhanced-professions-summary'),
             fetch('/api/combinations'),
             fetch('/api/wow-token'),
             fetch('/api/missing-profession-coverage'),
-            fetch('/api/notes-all')
+            fetch('/api/notes-all'),
+            fetch('/api/quest-zones-summary')
         ]);
         
         allCharactersData = await charactersRes.json();
@@ -66,19 +68,24 @@ async function loadDashboardData() {
         tokenData = await tokenRes.json();
         missingCoverageData = await missingCoverageRes.json();
         notesData = await notesRes.json();
-        
+        questZonesData = await questZonesRes.json();
+
         // Apply default filter to characters
         applyLevelFilter(currentFilter);
-        
+
         // Set up filter buttons
         setupFilterButtons();
-        
+
+        // Set up expansion filter
+        setupExpansionFilter();
+
         // Render all dashboard sections
         renderStats();
         renderWoWToken();
         renderCoverage();
         renderProfessions();
         renderMissingCoverage();
+        renderQuestZones();
         renderTopCharacters();
         renderRecentNotes();        
     } catch (error) {
@@ -815,4 +822,65 @@ function showSuccess(message) {
     setTimeout(() => {
         successEl.style.display = 'none';
     }, 5000);
+}
+
+// Setup expansion filter
+function setupExpansionFilter() {
+    const expansionFilter = document.getElementById('expansion-filter');
+    if (expansionFilter) {
+        expansionFilter.addEventListener('change', function() {
+            renderQuestZones();
+        });
+    }
+}
+
+// Render quest zones section
+function renderQuestZones() {
+    const container = document.getElementById('quest-zones-list');
+    if (!container) return;
+
+    const expansionFilter = document.getElementById('expansion-filter');
+    const selectedExpansion = expansionFilter ? expansionFilter.value : 'all';
+
+    // Filter zones by expansion if needed
+    let filteredZones = questZonesData;
+    if (selectedExpansion !== 'all') {
+        filteredZones = questZonesData.filter(zone => zone.expansion_name === selectedExpansion);
+    }
+
+    if (!filteredZones || filteredZones.length === 0) {
+        container.innerHTML = '<div class="no-data">No quest data available yet. Refresh your character data to populate quest completion information.</div>';
+        return;
+    }
+
+    // Sort by completion count (descending), then by total quests (descending)
+    filteredZones.sort((a, b) => {
+        if (b.completed_quests !== a.completed_quests) {
+            return b.completed_quests - a.completed_quests;
+        }
+        return b.total_quests - a.total_quests;
+    });
+
+    let html = '';
+    filteredZones.forEach(zone => {
+        const completionClass = zone.completion_percentage >= 90 ? 'high' :
+                               zone.completion_percentage >= 50 ? 'medium' : 'low';
+
+        html += `
+            <div class="zone-item">
+                <div class="zone-header">
+                    <span class="zone-name">${zone.zone_name}</span>
+                    <span class="zone-expansion">${zone.expansion_name}</span>
+                </div>
+                <div class="zone-completion">
+                    <div class="completion-bar">
+                        <div class="completion-fill ${completionClass}" style="width: ${zone.completion_percentage}%"></div>
+                    </div>
+                    <span class="completion-text">${zone.completed_quests}/${zone.total_quests} (${zone.completion_percentage}%)</span>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
 }

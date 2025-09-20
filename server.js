@@ -260,6 +260,44 @@ async function getUserRegionForAPI(userId) {
     }
 }
 
+// Helper function to fetch character completed quests
+async function fetchCharacterCompletedQuests(region, realmSlug, characterName, accessToken) {
+    try {
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/profile/wow/character/${realmSlug}/${characterName.toLowerCase()}/quests/completed?namespace=profile-${region}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            }
+        );
+
+        return response.data.quests || [];
+    } catch (error) {
+        console.error(`Failed to fetch quests for ${characterName}:`, error.message);
+        return [];
+    }
+}
+
+// Helper function to fetch quest details from API
+async function fetchQuestDetails(region, questId, accessToken) {
+    try {
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/quest/${questId}?namespace=static-${region}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            }
+        );
+
+        return response.data;
+    } catch (error) {
+        // Quest might not exist in static data (this is the known API issue)
+        return null;
+    }
+}
+
 // Middleware to check authentication
 function requireAuth(req, res, next) {
     if (!req.session.userId || !req.session.accessToken) {
@@ -567,7 +605,25 @@ app.get('/api/characters', requireAuth, async (req, res) => {
                         
                         // Save to database for this user
                         await database.upsertCharacter(userId, characterData);
-                        
+
+                        // Fetch and save quest completion data
+                        try {
+                            const completedQuests = await fetchCharacterCompletedQuests(
+                                userRegion,
+                                char.realm.slug,
+                                char.name,
+                                req.session.accessToken
+                            );
+
+                            for (const quest of completedQuests) {
+                                await database.upsertCompletedQuest(userId, quest.id);
+                            }
+
+                            console.log(`Saved ${completedQuests.length} completed quests for ${char.name}`);
+                        } catch (questErr) {
+                            console.error(`Failed to get quests for ${char.name}:`, questErr.message);
+                        }
+
                         characters.push(characterData);
                     } catch (err) {
                         console.error(`Failed to get details for ${char.name}:`, err.message);
@@ -578,10 +634,18 @@ app.get('/api/characters', requireAuth, async (req, res) => {
         
         // Update combinations for this user
         await database.updateCombinations(userId, characters);
-        
+
+        // Update quest zone summaries
+        try {
+            await database.updateZoneQuestSummary(userId);
+            console.log('Updated quest zone summaries');
+        } catch (summaryErr) {
+            console.error('Failed to update quest zone summaries:', summaryErr.message);
+        }
+
         // Sort by item level
         characters.sort((a, b) => (b.averageItemLevel || 0) - (a.averageItemLevel || 0));
-        
+
         res.json(characters);
     } catch (error) {
         console.error('API error:', error.response?.data || error.message);
@@ -1014,6 +1078,29 @@ app.get('/api/recipe-cache-status', async (req, res) => {
     } catch (error) {
         console.error('Recipe cache status error:', error);
         res.status(500).json({ error: 'Failed to get cache status' });
+    }
+});
+
+// Quest zone summary endpoint
+app.get('/api/quest-zones-summary', requireAuth, async (req, res) => {
+    try {
+        const expansionFilter = req.query.expansion || 'all';
+        const zones = await database.getZoneQuestSummary(req.session.userId, expansionFilter);
+        res.json(zones);
+    } catch (error) {
+        console.error('Quest zones summary error:', error);
+        res.status(500).json({ error: 'Failed to get quest zones summary' });
+    }
+});
+
+// Get quest cache status
+app.get('/api/quest-cache-status', requireAuth, async (req, res) => {
+    try {
+        const status = await database.getQuestCacheStatus();
+        res.json(status);
+    } catch (error) {
+        console.error('Quest cache status error:', error);
+        res.status(500).json({ error: 'Failed to get quest cache status' });
     }
 });
 

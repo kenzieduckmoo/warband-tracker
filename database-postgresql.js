@@ -226,6 +226,46 @@ async function initDatabase() {
             )
         `);
 
+        // Quest tracking tables
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS cached_quests (
+                id SERIAL PRIMARY KEY,
+                quest_id INTEGER UNIQUE NOT NULL,
+                quest_name TEXT NOT NULL,
+                zone_name TEXT NOT NULL,
+                expansion_name TEXT NOT NULL,
+                category TEXT,
+                is_seasonal BOOLEAN DEFAULT FALSE,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS warband_completed_quests (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                quest_id INTEGER NOT NULL,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                UNIQUE(user_id, quest_id)
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS zone_quest_summary (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                zone_name TEXT NOT NULL,
+                expansion_name TEXT NOT NULL,
+                total_quests INTEGER NOT NULL,
+                completed_quests INTEGER NOT NULL,
+                completion_percentage DECIMAL(5,2) NOT NULL,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                UNIQUE(user_id, zone_name, expansion_name)
+            )
+        `);
+
         await client.query('COMMIT');
         console.log('📊 PostgreSQL database initialized successfully');
     } catch (error) {
@@ -920,6 +960,135 @@ const dbHelpers = {
             });
 
             return sortedRows;
+        } finally {
+            client.release();
+        }
+    },
+
+    // Quest tracking functions
+    cacheQuest: async function(questId, questName, zoneName, expansionName, category = null, isSeasonal = false) {
+        const client = await pool.connect();
+        try {
+            await client.query(`
+                INSERT INTO cached_quests (quest_id, quest_name, zone_name, expansion_name, category, is_seasonal)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (quest_id) DO UPDATE SET
+                    quest_name = EXCLUDED.quest_name,
+                    zone_name = EXCLUDED.zone_name,
+                    expansion_name = EXCLUDED.expansion_name,
+                    category = EXCLUDED.category,
+                    is_seasonal = EXCLUDED.is_seasonal,
+                    cached_at = CURRENT_TIMESTAMP
+            `, [questId, questName, zoneName, expansionName, category, isSeasonal]);
+        } finally {
+            client.release();
+        }
+    },
+
+    upsertCompletedQuest: async function(userId, questId) {
+        const client = await pool.connect();
+        try {
+            await client.query(`
+                INSERT INTO warband_completed_quests (user_id, quest_id)
+                VALUES ($1, $2)
+                ON CONFLICT (user_id, quest_id) DO UPDATE SET
+                    last_updated = CURRENT_TIMESTAMP
+            `, [userId, questId]);
+        } finally {
+            client.release();
+        }
+    },
+
+    getZoneQuestSummary: async function(userId, expansionFilter = null) {
+        const client = await pool.connect();
+        try {
+            let query = `
+                SELECT
+                    zone_name,
+                    expansion_name,
+                    total_quests,
+                    completed_quests,
+                    completion_percentage
+                FROM zone_quest_summary
+                WHERE user_id = $1
+            `;
+            const params = [userId];
+
+            if (expansionFilter && expansionFilter !== 'all') {
+                query += ` AND expansion_name = $2`;
+                params.push(expansionFilter);
+            }
+
+            query += ` ORDER BY completed_quests DESC, total_quests DESC`;
+
+            const result = await client.query(query, params);
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
+    updateZoneQuestSummary: async function(userId) {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Clear existing summary for this user
+            await client.query('DELETE FROM zone_quest_summary WHERE user_id = $1', [userId]);
+
+            // Calculate new summary
+            await client.query(`
+                INSERT INTO zone_quest_summary (user_id, zone_name, expansion_name, total_quests, completed_quests, completion_percentage)
+                SELECT
+                    $1 as user_id,
+                    cq.zone_name,
+                    cq.expansion_name,
+                    COUNT(cq.quest_id)::integer as total_quests,
+                    COUNT(wcq.quest_id)::integer as completed_quests,
+                    ROUND(
+                        CASE
+                            WHEN COUNT(cq.quest_id) > 0
+                            THEN (COUNT(wcq.quest_id)::DECIMAL / COUNT(cq.quest_id)) * 100
+                            ELSE 0
+                        END, 2
+                    ) as completion_percentage
+                FROM cached_quests cq
+                LEFT JOIN warband_completed_quests wcq ON cq.quest_id = wcq.quest_id AND wcq.user_id = $1
+                WHERE cq.is_seasonal = FALSE
+                GROUP BY cq.zone_name, cq.expansion_name
+            `, [userId]);
+
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    },
+
+    getQuestCacheStatus: async function() {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(`
+                SELECT
+                    COUNT(*)::integer as total_quests,
+                    MAX(cached_at) as last_cached,
+                    COUNT(DISTINCT zone_name)::integer as cached_zones,
+                    COUNT(DISTINCT expansion_name)::integer as cached_expansions
+                FROM cached_quests
+            `);
+            return result.rows[0];
+        } finally {
+            client.release();
+        }
+    },
+
+    clearQuestCache: async function() {
+        const client = await pool.connect();
+        try {
+            await client.query('DELETE FROM cached_quests');
+            console.log('Cleared quest cache');
         } finally {
             client.release();
         }
