@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('refresh-btn').addEventListener('click', refreshAllData);
     document.getElementById('sync-quests-btn').addEventListener('click', syncQuests);
     document.getElementById('populate-quest-cache-btn').addEventListener('click', populateQuestCache);
+    document.getElementById('cleanup-zone-names-btn').addEventListener('click', cleanupZoneNames);
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('update-recipe-cache-btn').addEventListener('click', updateRecipeCache);
     document.getElementById('region-select').addEventListener('change', handleRegionChange);
@@ -205,6 +206,45 @@ async function populateQuestCache() {
     } finally {
         populateBtn.innerHTML = '📚 Populate Quest Cache';
         populateBtn.disabled = false;
+    }
+}
+
+// Cleanup JSON zone names in database
+async function cleanupZoneNames() {
+    const cleanupBtn = document.getElementById('cleanup-zone-names-btn');
+    cleanupBtn.innerHTML = '<span class="loading-spinner"></span> Cleaning Zone Names...';
+    cleanupBtn.disabled = true;
+
+    try {
+        const response = await fetch('/api/cleanup-zone-names', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Zone cleanup result:', result);
+
+            showSuccessMessage(
+                `Zone cleanup completed! Processed ${result.processed} records, updated ${result.updated} zone names from JSON to English text.`
+            );
+
+            // Refresh quest zone data to show the cleaned results
+            await loadDashboardData();
+
+        } else {
+            const error = await response.json();
+            console.error('Zone cleanup failed:', error);
+            showError('Failed to cleanup zone names. Please try again.');
+        }
+    } catch (error) {
+        console.error('Failed to cleanup zone names:', error);
+        showError('Failed to cleanup zone names. Please check your connection and try again.');
+    } finally {
+        cleanupBtn.innerHTML = '🧹 Cleanup Zone Names';
+        cleanupBtn.disabled = false;
     }
 }
 

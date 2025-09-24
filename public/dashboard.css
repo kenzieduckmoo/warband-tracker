@@ -334,10 +334,28 @@ body {
     white-space: nowrap;
 }
 
+.btn-cleanup-zones {
+    padding: 8px 16px;
+    background: rgba(255, 140, 0, 0.2);
+    color: #ff8c00;
+    border: 1px solid #ff8c00;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
 .btn-populate-quest-cache:hover {
     background: rgba(147, 112, 219, 0.3);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(147, 112, 219, 0.3);
+}
+
+.btn-cleanup-zones:hover {
+    background: rgba(255, 140, 0, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
 }
 
 .btn-populate-quest-cache:disabled {

@@ -1300,6 +1300,46 @@ const dbHelpers = {
         } finally {
             client.release();
         }
+    },
+
+    cleanupJsonZoneNames: async function() {
+        const client = await pool.connect();
+        try {
+            console.log('Starting zone name cleanup...');
+
+            // Find all records with JSON-formatted area names
+            const jsonRecords = await client.query(`
+                SELECT id, area_name
+                FROM quest_master_cache
+                WHERE area_name LIKE '{"en_US"%'
+            `);
+
+            console.log(`Found ${jsonRecords.rows.length} records with JSON area names`);
+
+            let updated = 0;
+            for (const record of jsonRecords.rows) {
+                try {
+                    const jsonData = JSON.parse(record.area_name);
+                    const englishName = jsonData.en_US || jsonData.en_GB;
+
+                    if (englishName) {
+                        await client.query(`
+                            UPDATE quest_master_cache
+                            SET area_name = $1, last_updated = CURRENT_TIMESTAMP
+                            WHERE id = $2
+                        `, [englishName, record.id]);
+                        updated++;
+                    }
+                } catch (parseError) {
+                    console.log(`Failed to parse JSON for record ${record.id}:`, parseError.message);
+                }
+            }
+
+            console.log(`✅ Updated ${updated} zone names from JSON to English text`);
+            return { processed: jsonRecords.rows.length, updated };
+        } finally {
+            client.release();
+        }
     }
 };
 

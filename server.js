@@ -1249,8 +1249,8 @@ app.post('/api/sync-quests', requireAuth, async (req, res) => {
                     await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
                 }
 
-                // Convert realm name to proper slug format for Battle.net API
-                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '-').replace(/[^a-z0-9-]/g, '');
+                // Convert realm name to proper format for Battle.net API
+                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
 
                 const completedQuests = await fetchCharacterCompletedQuests(
                     userRegion,
@@ -1358,7 +1358,7 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
             try {
                 // Get character professions from API
                 const professionsResponse = await axios.get(
-                    `https://${userRegion}.api.blizzard.com/profile/wow/character/${character.realm.toLowerCase().replace(' ', '')}/${character.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
+                    `https://${userRegion}.api.blizzard.com/profile/wow/character/${character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '')}/${character.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
                     {
                         headers: {
                             'Authorization': `Bearer ${req.session.accessToken}`
@@ -1495,8 +1495,8 @@ app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
 
-                // Convert realm name to proper slug format for Battle.net API
-                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '-').replace(/[^a-z0-9-]/g, '');
+                // Convert realm name to proper format for Battle.net API
+                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
 
                 const completedQuests = await fetchCharacterCompletedQuests(
                     userRegion,
@@ -1610,6 +1610,23 @@ app.get('/api/incomplete-quests-by-zone', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Failed to get incomplete quests by zone:', error);
         res.status(500).json({ error: 'Failed to get zone completion data' });
+    }
+});
+
+// Cleanup JSON zone names in database
+app.post('/api/cleanup-zone-names', requireAuth, async (req, res) => {
+    try {
+        console.log('Starting zone name cleanup...');
+        const result = await database.cleanupJsonZoneNames();
+
+        res.json({
+            message: 'Zone name cleanup completed',
+            processed: result.processed,
+            updated: result.updated
+        });
+    } catch (error) {
+        console.error('Failed to cleanup zone names:', error);
+        res.status(500).json({ error: 'Failed to cleanup zone names' });
     }
 });
 
