@@ -300,6 +300,22 @@ async function initDatabase() {
             )
         `);
 
+        // Migrations for existing databases
+        // Add quest_sync_time column to users table if it doesn't exist
+        try {
+            await client.query(`
+                ALTER TABLE users ADD COLUMN quest_sync_time TIMESTAMP DEFAULT NULL
+            `);
+            console.log('✅ Added quest_sync_time column to users table');
+        } catch (error) {
+            if (error.code === '42701') {
+                // Column already exists, ignore
+                console.log('✅ quest_sync_time column already exists in users table');
+            } else {
+                console.log('⚠️ Error adding quest_sync_time column:', error.message);
+            }
+        }
+
         await client.query('COMMIT');
         console.log('📊 PostgreSQL database initialized successfully');
     } catch (error) {
