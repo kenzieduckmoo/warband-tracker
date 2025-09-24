@@ -879,43 +879,14 @@ function showSuccess(message) {
     }, 5000);
 }
 
-// Setup expansion filter
+// Setup expansion filter (no longer needed - function kept for compatibility)
 function setupExpansionFilter() {
-    const expansionFilter = document.getElementById('expansion-filter');
-    if (expansionFilter) {
-        expansionFilter.addEventListener('change', function() {
-            renderQuestZones();
-        });
-    }
+    // Expansion filter removed - no longer needed
 }
 
-// Update expansion filter dropdown with actual data
+// Update expansion filter dropdown (no longer needed)
 function updateExpansionFilter() {
-    const expansionFilter = document.getElementById('expansion-filter');
-    if (!expansionFilter || !questZonesData || questZonesData.length === 0) return;
-
-    // Get current selection
-    const currentSelection = expansionFilter.value;
-
-    // Get unique expansion names from the data
-    const uniqueExpansions = [...new Set(questZonesData.map(z => z.expansion_name))].sort();
-
-    // Build new options
-    let optionsHTML = '<option value="all">All Expansions</option>';
-    uniqueExpansions.forEach(expansion => {
-        optionsHTML += `<option value="${expansion}">${expansion}</option>`;
-    });
-
-    expansionFilter.innerHTML = optionsHTML;
-
-    // Restore selection if it still exists
-    if (currentSelection !== 'all' && uniqueExpansions.includes(currentSelection)) {
-        expansionFilter.value = currentSelection;
-    }
-
-    // Re-add the event listener since we rebuilt the dropdown
-    expansionFilter.removeEventListener('change', renderQuestZones);
-    expansionFilter.addEventListener('change', renderQuestZones);
+    // Expansion filter removed - no longer needed
 }
 
 // Render quest zones section
@@ -923,19 +894,7 @@ function renderQuestZones() {
     const container = document.getElementById('quest-zones-list');
     if (!container) return;
 
-    // Update the expansion filter dropdown first
-    updateExpansionFilter();
-
-    const expansionFilter = document.getElementById('expansion-filter');
-    const selectedExpansion = expansionFilter ? expansionFilter.value : 'all';
-
-    // Filter zones by expansion if needed
-    let filteredZones = questZonesData;
-    if (selectedExpansion !== 'all') {
-        filteredZones = questZonesData.filter(zone => zone.expansion_name === selectedExpansion);
-    }
-
-    if (!filteredZones || filteredZones.length === 0) {
+    if (!questZonesData || questZonesData.length === 0) {
         container.innerHTML = '<div class="no-data">No incomplete quest zones found. Either all zones are complete or you need to populate the quest cache and sync quest data first.</div>';
         return;
     }
@@ -944,15 +903,20 @@ function renderQuestZones() {
     // No additional sorting needed
 
     let html = '';
-    filteredZones.forEach(zone => {
+    questZonesData.forEach(zone => {
         const completionClass = zone.completion_percentage >= 90 ? 'high' :
                                zone.completion_percentage >= 50 ? 'medium' : 'low';
+
+        // Create Wowhead zone link if we have an area_id
+        const wowheadLink = zone.area_id ?
+            `<a href="https://www.wowhead.com/zone=${zone.area_id}" target="_blank" class="wowhead-link">🔗</a>` :
+            '<span class="no-link">—</span>';
 
         html += `
             <div class="zone-item">
                 <div class="zone-header">
                     <span class="zone-name">${zone.zone_name}</span>
-                    <span class="zone-expansion">${zone.expansion_name}</span>
+                    ${wowheadLink}
                     <span class="zone-incomplete-count">${zone.incomplete_quests} incomplete</span>
                 </div>
                 <div class="zone-completion">

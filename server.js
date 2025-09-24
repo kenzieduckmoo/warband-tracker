@@ -799,6 +799,251 @@ app.get('/auth/login', (req, res) => {
     res.redirect(authUrl);
 });
 
+// Reusable function to refresh character data for a user
+async function refreshUserCharacterData(userId, accessToken, userRegion) {
+    const profileResponse = await axios.get(
+        `https://${userRegion}.api.blizzard.com/profile/user/wow?namespace=profile-${userRegion}`,
+        {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        }
+    );
+
+    const characters = [];
+
+    for (const account of profileResponse.data.wow_accounts) {
+        for (const char of account.characters) {
+            if (char.level >= 10) {
+                try {
+                    // Get character details
+                    const charDetails = await axios.get(
+                        `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}?namespace=profile-${userRegion}`,
+                        {
+                            headers: {
+                                'Authorization': `Bearer ${accessToken}`
+                            }
+                        }
+                    );
+
+                    // Get character titles
+                    let titleData = null;
+                    try {
+                        const titlesResponse = await axios.get(
+                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/titles?namespace=profile-${userRegion}`,
+                            {
+                                headers: {
+                                    'Authorization': `Bearer ${accessToken}`
+                                }
+                            }
+                        );
+
+                        if (titlesResponse.data.active_title) {
+                            titleData = {
+                                name: extractEnglishText(titlesResponse.data.active_title),
+                                display_string: titlesResponse.data.active_title.display_string
+                            };
+                        }
+                    } catch (titleErr) {
+                        console.error(`Failed to get titles for ${char.name}:`, titleErr.message);
+                    }
+
+                    // Get professions
+                    let professions = [];
+                    try {
+                        const professionsResponse = await axios.get(
+                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
+                            {
+                                headers: {
+                                    'Authorization': `Bearer ${accessToken}`
+                                }
+                            }
+                        );
+
+                        if (professionsResponse.data.primaries) {
+                            for (const prof of professionsResponse.data.primaries) {
+                                const professionName = extractEnglishText(prof.profession);
+                                const professionId = prof.profession.id;
+
+                                // Process tiers
+                                const tiers = prof.tiers ? prof.tiers.map(tier => ({
+                                    name: extractEnglishText(tier.tier),
+                                    id: tier.tier?.id,
+                                    skillLevel: tier.skill_points || 0,
+                                    maxSkill: tier.max_skill_points || 0,
+                                    recipes: tier.known_recipes ? tier.known_recipes.length : 0
+                                })) : [];
+
+                                // Save each tier to database AND store individual known recipes
+                                for (const tier of tiers) {
+                                    await database.upsertProfessionTier(
+                                        userId,
+                                        `${char.realm.slug}-${char.name.toLowerCase()}`,
+                                        professionName,
+                                        professionId,
+                                        tier
+                                    );
+
+                                    // Store individual known recipes if available
+                                    const originalTier = prof.tiers.find(t => t.tier?.id === tier.id);
+                                    if (originalTier && originalTier.known_recipes) {
+                                        const knownRecipeIds = originalTier.known_recipes.map(recipe => recipe.id);
+                                        await database.upsertKnownRecipes(
+                                            userId,
+                                            `${char.realm.slug}-${char.name.toLowerCase()}`,
+                                            professionId,
+                                            tier.id,
+                                            knownRecipeIds
+                                        );
+                                    }
+                                }
+
+                                professions.push({
+                                    name: professionName,
+                                    id: professionId,
+                                    tiers: tiers,
+                                    totalRecipes: tiers.reduce((sum, tier) => sum + tier.recipes, 0)
+                                });
+                            }
+                        }
+                    } catch (profErr) {
+                        console.error(`Failed to get professions for ${char.name}:`, profErr.message);
+                    }
+
+                    const characterData = {
+                        id: `${char.realm.slug}-${char.name.toLowerCase()}`,
+                        name: char.name,
+                        realm: extractEnglishText(charDetails.data.realm),
+                        level: charDetails.data.level,
+                        class: extractEnglishText(charDetails.data.character_class),
+                        race: extractEnglishText(charDetails.data.race),
+                        faction: extractEnglishText(charDetails.data.faction),
+                        averageItemLevel: charDetails.data.average_item_level,
+                        equippedItemLevel: charDetails.data.equipped_item_level,
+                        title: titleData,
+                        guild: charDetails.data.guild ? extractEnglishText(charDetails.data.guild) : null,
+                        activeSpec: charDetails.data.active_spec ? extractEnglishText(charDetails.data.active_spec) : null,
+                        covenant: charDetails.data.covenant_progress ? extractEnglishText(charDetails.data.covenant_progress.chosen_covenant) : null,
+                        professions: professions
+                    };
+
+                    // Save to database for this user
+                    await database.upsertCharacter(userId, characterData);
+                    characters.push(characterData);
+                } catch (err) {
+                    console.error(`Failed to get details for ${char.name}:`, err.message);
+                }
+            }
+        }
+    }
+
+    // Update combinations for this user
+    await database.updateCombinations(userId, characters);
+
+    // Update quest zone summaries
+    try {
+        await database.updateZoneQuestSummary(userId);
+        console.log('Updated quest zone summaries');
+    } catch (summaryErr) {
+        console.error('Failed to update quest zone summaries:', summaryErr.message);
+    }
+
+    // Sync quest completion data (with rate limiting)
+    let questSyncResult = { charactersProcessed: 0, totalQuests: 0, questsContributedToDatabase: 0 };
+    try {
+        // Check if quest sync was done recently (within 6 hours)
+        const lastQuestSync = await database.getLastQuestSyncTime(userId);
+        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+
+        if (!lastQuestSync || lastQuestSync <= sixHoursAgo) {
+            console.log('Syncing quest completion data...');
+            let charactersProcessed = 0;
+            let totalQuests = 0;
+            let totalQuestsAddedToSharedDatabase = 0;
+
+            for (const character of characters) {
+                try {
+                    // Add delay between characters to respect rate limits
+                    if (charactersProcessed > 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+                    }
+
+                    // Convert realm name to proper format for Battle.net API
+                    const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
+
+                    const completedQuests = await fetchCharacterCompletedQuests(
+                        userRegion,
+                        realmSlug,
+                        character.name,
+                        accessToken
+                    );
+
+                    // Save completed quest data for this user
+                    for (const quest of completedQuests) {
+                        await database.upsertCompletedQuest(userId, quest.id);
+                    }
+
+                    // Add quests to shared database for community benefit
+                    let questsAddedToDatabase = 0;
+                    for (const quest of completedQuests) {
+                        try {
+                            const existingQuest = await database.getQuestFromMaster(quest.id);
+                            if (!existingQuest) {
+                                const questDetails = await fetchQuestDetails(userRegion, quest.id, accessToken);
+                                if (questDetails) {
+                                    const questData = {
+                                        quest_id: questDetails.id,
+                                        quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
+                                        area_id: questDetails.area?.id || null,
+                                        area_name: extractEnglishText(questDetails.area?.name) || null,
+                                        category_id: questDetails.category?.id || null,
+                                        category_name: extractEnglishText(questDetails.category?.name) || null,
+                                        type_id: questDetails.type?.id || null,
+                                        type_name: extractEnglishText(questDetails.type?.name) || null,
+                                        expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
+                                        is_seasonal: questDetails.id > 60000
+                                    };
+                                    await database.upsertQuestMaster(questData);
+                                    questsAddedToDatabase++;
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                            }
+                        } catch (questErr) {
+                            // Skip quest details fetch errors
+                        }
+                    }
+
+                    totalQuests += completedQuests.length;
+                    totalQuestsAddedToSharedDatabase += questsAddedToDatabase;
+                    charactersProcessed++;
+
+                    console.log(`${character.name}: ${completedQuests.length} quests, ${questsAddedToDatabase} contributed to database`);
+
+                } catch (charErr) {
+                    console.error(`Failed to sync quests for ${character.name}:`, charErr.message);
+                }
+            }
+
+            // Update quest sync timestamp
+            await database.updateQuestSyncTime(userId);
+
+            questSyncResult = {
+                charactersProcessed,
+                totalQuests,
+                questsContributedToDatabase: totalQuestsAddedToSharedDatabase
+            };
+
+            console.log(`Quest sync completed: ${charactersProcessed} characters, ${totalQuests} total quests, ${totalQuestsAddedToSharedDatabase} contributed to shared database`);
+        } else {
+            console.log('Quest sync skipped - data is recent');
+        }
+    } catch (questErr) {
+        console.error('Failed to sync quest data:', questErr.message);
+    }
+
+    return { characters, questSync: questSyncResult };
+}
+
 app.get('/auth/callback', async (req, res) => {
     const { code, state } = req.query;
     
@@ -868,7 +1113,38 @@ app.get('/auth/callback', async (req, res) => {
         req.session.userId = user.id;
         req.session.battlenetTag = user.battlenet_tag;
         req.session.accessToken = accessToken;
-        
+
+        // Check if character data needs auto-refresh (over 12 hours old)
+        try {
+            const characters = await database.getAllCharacters(user.id);
+            if (characters.length > 0) {
+                // Find the most recent character update
+                const mostRecentUpdate = characters.reduce((latest, char) => {
+                    const charUpdate = new Date(char.last_updated);
+                    return charUpdate > latest ? charUpdate : latest;
+                }, new Date(0));
+
+                const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000);
+
+                if (mostRecentUpdate < twelveHoursAgo) {
+                    console.log(`Auto-refreshing data for ${user.battlenet_tag} - last update: ${mostRecentUpdate.toISOString()}`);
+
+                    // Trigger async refresh after login completes
+                    setTimeout(async () => {
+                        try {
+                            const userRegion = await getUserRegionForAPI(user.id);
+                            await refreshUserCharacterData(user.id, accessToken, userRegion);
+                            console.log(`Auto-refresh completed for ${user.battlenet_tag}`);
+                        } catch (refreshError) {
+                            console.error(`Auto-refresh failed for ${user.battlenet_tag}:`, refreshError.message);
+                        }
+                    }, 1000); // Small delay to let login complete first
+                }
+            }
+        } catch (autoRefreshError) {
+            console.error('Auto-refresh check failed:', autoRefreshError.message);
+        }
+
         console.log(`User ${user.battlenet_tag} logged in successfully from ${region.toUpperCase()} region`);
         res.redirect('/');
     } catch (error) {
@@ -921,258 +1197,17 @@ app.get('/api/auth/status', async (req, res) => {
 
 app.get('/api/characters', requireAuth, async (req, res) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    
+
     try {
         const userId = req.session.userId;
         const userRegion = await getUserRegionForAPI(userId);
-        
-        const profileResponse = await axios.get(
-            `https://${userRegion}.api.blizzard.com/profile/user/wow?namespace=profile-${userRegion}`,
-            {
-                headers: {
-                    'Authorization': `Bearer ${req.session.accessToken}`
-                }
-            }
-        );
-        
-        const characters = [];
-        
-        for (const account of profileResponse.data.wow_accounts) {
-            for (const char of account.characters) {
-                if (char.level >= 10) {
-                    try {
-                        // Get character details
-                        const charDetails = await axios.get(
-                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}?namespace=profile-${userRegion}`,
-                            {
-                                headers: {
-                                    'Authorization': `Bearer ${req.session.accessToken}`
-                                }
-                            }
-                        );
-                        
-                        // Get character titles
-                        let titleData = null;
-                        try {
-                            const titlesResponse = await axios.get(
-                                `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/titles?namespace=profile-${userRegion}`,
-                                {
-                                    headers: {
-                                        'Authorization': `Bearer ${req.session.accessToken}`
-                                    }
-                                }
-                            );
-                            
-                            if (titlesResponse.data.active_title) {
-                                titleData = {
-                                    name: extractEnglishText(titlesResponse.data.active_title),
-                                    display_string: titlesResponse.data.active_title.display_string
-                                };
-                            }
-                        } catch (titleErr) {
-                            console.error(`Failed to get titles for ${char.name}:`, titleErr.message);
-                        }
-                        
-                        // Get professions
-                        let professions = [];
-                        try {
-                            const professionsResponse = await axios.get(
-                                `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
-                                {
-                                    headers: {
-                                        'Authorization': `Bearer ${req.session.accessToken}`
-                                    }
-                                }
-                            );
-                            
-                            if (professionsResponse.data.primaries) {
-                                for (const prof of professionsResponse.data.primaries) {
-                                    const professionName = extractEnglishText(prof.profession);
-                                    const professionId = prof.profession.id;
-                                    
-                                    // Process tiers
-                                    const tiers = prof.tiers ? prof.tiers.map(tier => ({
-                                        name: extractEnglishText(tier.tier),
-                                        id: tier.tier?.id,
-                                        skillLevel: tier.skill_points || 0,
-                                        maxSkill: tier.max_skill_points || 0,
-                                        recipes: tier.known_recipes ? tier.known_recipes.length : 0
-                                    })) : [];
-                                    
-                                    // Save each tier to database AND store individual known recipes
-                                    for (const tier of tiers) {
-                                        await database.upsertProfessionTier(
-                                            userId,
-                                            `${char.realm.slug}-${char.name.toLowerCase()}`,
-                                            professionName,
-                                            professionId,
-                                            tier
-                                        );
-                                        
-                                        // Store individual known recipes if available
-                                        const originalTier = prof.tiers.find(t => t.tier?.id === tier.id);
-                                        if (originalTier && originalTier.known_recipes) {
-                                            const knownRecipeIds = originalTier.known_recipes.map(recipe => recipe.id);
-                                            await database.upsertKnownRecipes(
-                                                userId,
-                                                `${char.realm.slug}-${char.name.toLowerCase()}`,
-                                                professionId,
-                                                tier.id,
-                                                knownRecipeIds
-                                            );
-                                        }
-                                    }
-                                    
-                                    professions.push({
-                                        name: professionName,
-                                        id: professionId,
-                                        tiers: tiers,
-                                        totalRecipes: tiers.reduce((sum, tier) => sum + tier.recipes, 0)
-                                    });
-                                }
-                            }
-                        } catch (profErr) {
-                            console.error(`Failed to get professions for ${char.name}:`, profErr.message);
-                        }
-                        
-                        const characterData = {
-                            id: `${char.realm.slug}-${char.name.toLowerCase()}`,
-                            name: char.name,
-                            realm: extractEnglishText(charDetails.data.realm),
-                            level: charDetails.data.level,
-                            class: extractEnglishText(charDetails.data.character_class),
-                            race: extractEnglishText(charDetails.data.race),
-                            faction: extractEnglishText(charDetails.data.faction),
-                            averageItemLevel: charDetails.data.average_item_level,
-                            equippedItemLevel: charDetails.data.equipped_item_level,
-                            title: titleData,
-                            guild: charDetails.data.guild ? extractEnglishText(charDetails.data.guild) : null,
-                            activeSpec: charDetails.data.active_spec ? extractEnglishText(charDetails.data.active_spec) : null,
-                            covenant: charDetails.data.covenant_progress ? extractEnglishText(charDetails.data.covenant_progress.chosen_covenant) : null,
-                            professions: professions
-                        };
-                        
-                        // Save to database for this user
-                        await database.upsertCharacter(userId, characterData);
 
-                        // Quest data is now synced separately to avoid rate limiting
-
-                        characters.push(characterData);
-                    } catch (err) {
-                        console.error(`Failed to get details for ${char.name}:`, err.message);
-                    }
-                }
-            }
-        }
-        
-        // Update combinations for this user
-        await database.updateCombinations(userId, characters);
-
-        // Update quest zone summaries
-        try {
-            await database.updateZoneQuestSummary(userId);
-            console.log('Updated quest zone summaries');
-        } catch (summaryErr) {
-            console.error('Failed to update quest zone summaries:', summaryErr.message);
-        }
-
-        // Sync quest completion data (with rate limiting)
-        let questSyncResult = { charactersProcessed: 0, totalQuests: 0, questsContributedToDatabase: 0 };
-        try {
-            // Check if quest sync was done recently (within 6 hours)
-            const lastQuestSync = await database.getLastQuestSyncTime(userId);
-            const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-
-            if (!lastQuestSync || lastQuestSync <= sixHoursAgo) {
-                console.log('Syncing quest completion data...');
-                let charactersProcessed = 0;
-                let totalQuests = 0;
-                let totalQuestsAddedToSharedDatabase = 0;
-
-                for (const character of characters) {
-                    try {
-                        // Add delay between characters to respect rate limits
-                        if (charactersProcessed > 0) {
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
-                        }
-
-                        // Convert realm name to proper format for Battle.net API
-                        const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
-
-                        const completedQuests = await fetchCharacterCompletedQuests(
-                            userRegion,
-                            realmSlug,
-                            character.name,
-                            req.session.accessToken
-                        );
-
-                        // Save completed quest data for this user
-                        for (const quest of completedQuests) {
-                            await database.upsertCompletedQuest(userId, quest.id);
-                        }
-
-                        // Add quests to shared database for community benefit
-                        let questsAddedToDatabase = 0;
-                        for (const quest of completedQuests) {
-                            try {
-                                const existingQuest = await database.getQuestFromMaster(quest.id);
-                                if (!existingQuest) {
-                                    const questDetails = await fetchQuestDetails(userRegion, quest.id, req.session.accessToken);
-                                    if (questDetails) {
-                                        const questData = {
-                                            quest_id: questDetails.id,
-                                            quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
-                                            area_id: questDetails.area?.id || null,
-                                            area_name: extractEnglishText(questDetails.area?.name) || null,
-                                            category_id: questDetails.category?.id || null,
-                                            category_name: extractEnglishText(questDetails.category?.name) || null,
-                                            type_id: questDetails.type?.id || null,
-                                            type_name: extractEnglishText(questDetails.type?.name) || null,
-                                            expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
-                                            is_seasonal: questDetails.id > 60000
-                                        };
-                                        await database.upsertQuestMaster(questData);
-                                        questsAddedToDatabase++;
-                                    }
-                                    await new Promise(resolve => setTimeout(resolve, 100));
-                                }
-                            } catch (questErr) {
-                                // Skip quest details fetch errors
-                            }
-                        }
-
-                        totalQuests += completedQuests.length;
-                        totalQuestsAddedToSharedDatabase += questsAddedToDatabase;
-                        charactersProcessed++;
-
-                        console.log(`${character.name}: ${completedQuests.length} quests, ${questsAddedToDatabase} contributed to database`);
-
-                    } catch (charErr) {
-                        console.error(`Failed to sync quests for ${character.name}:`, charErr.message);
-                    }
-                }
-
-                // Update quest sync timestamp
-                await database.updateQuestSyncTime(userId);
-
-                questSyncResult = {
-                    charactersProcessed,
-                    totalQuests,
-                    questsContributedToDatabase: totalQuestsAddedToSharedDatabase
-                };
-
-                console.log(`Quest sync completed: ${charactersProcessed} characters, ${totalQuests} total quests, ${totalQuestsAddedToSharedDatabase} contributed to shared database`);
-            } else {
-                console.log('Quest sync skipped - data is recent');
-            }
-        } catch (questErr) {
-            console.error('Failed to sync quest data:', questErr.message);
-        }
+        const result = await refreshUserCharacterData(userId, req.session.accessToken, userRegion);
 
         // Sort by item level
-        characters.sort((a, b) => (b.averageItemLevel || 0) - (a.averageItemLevel || 0));
+        result.characters.sort((a, b) => (b.averageItemLevel || 0) - (a.averageItemLevel || 0));
 
-        res.json({ characters, questSync: questSyncResult });
+        res.json(result);
     } catch (error) {
         console.error('API error:', error.response?.data || error.message);
         if (error.response?.status === 401) {
@@ -1484,11 +1519,39 @@ app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
 
                 console.log(`${character.name}: Found ${completedQuests.length} completed quests`);
 
-                // Just record completed quests for now, get details later
+                // Record completed quests AND add them to master database
                 for (const questRef of completedQuests) {
                     if (!seenQuests.has(questRef.id)) {
                         seenQuests.add(questRef.id);
                         await database.upsertCompletedQuest(userId, questRef.id);
+
+                        // Also add to master quest database if not already there
+                        try {
+                            const existingQuest = await database.getQuestFromMaster(questRef.id);
+                            if (!existingQuest) {
+                                const questDetails = await fetchQuestDetails(userRegion, questRef.id, req.session.accessToken);
+                                if (questDetails) {
+                                    const questData = {
+                                        quest_id: questDetails.id,
+                                        quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
+                                        area_id: questDetails.area?.id || null,
+                                        area_name: extractEnglishText(questDetails.area?.name) || null,
+                                        category_id: questDetails.category?.id || null,
+                                        category_name: extractEnglishText(questDetails.category?.name) || null,
+                                        type_id: questDetails.type?.id || null,
+                                        type_name: extractEnglishText(questDetails.type?.name) || null,
+                                        expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
+                                        is_seasonal: questDetails.id > 60000
+                                    };
+                                    await database.upsertQuestMaster(questData);
+                                    processed++;
+                                }
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                            }
+                        } catch (questErr) {
+                            failed++;
+                            console.error(`Failed to add quest ${questRef.id} to master database:`, questErr.message);
+                        }
                     }
                 }
 
