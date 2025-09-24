@@ -246,15 +246,21 @@ async function getClientCredentialsToken(region = 'us') {
 
 // Helper function to extract English text from Blizzard's localized objects
 function extractEnglishText(obj) {
-    if (!obj) return 'Unknown';
+    if (!obj) return null; // Changed from 'Unknown' to null for better handling
     if (typeof obj === 'string') return obj;
+
+    // Handle direct localized objects like {"en_US": "Ashenvale", "es_MX": "Vallefresno", ...}
+    if (typeof obj === 'object' && obj.en_US) {
+        return obj.en_US;
+    }
+
+    // Handle nested name objects
     if (obj.name && typeof obj.name === 'object' && obj.name.en_US) {
         return obj.name.en_US;
     }
-    if (obj.en_US) return obj.en_US;
     if (obj.name && typeof obj.name === 'string') return obj.name;
-    
-    return 'Unknown';
+
+    return null; // Changed from 'Unknown' to null
 }
 
 // Function to check and update quest cache
@@ -607,6 +613,7 @@ const WOW_ZONES = [
     'Isle of Dorn', 'The Ringing Deeps', 'Hallowfall', 'Azj-Kahet'
 ];
 
+
 // Track quest discovery progress to avoid re-scanning same IDs
 let questDiscoveryOffset = 0;
 
@@ -655,13 +662,13 @@ async function backgroundQuestDiscovery(region, accessToken, maxQuests = 2000) {
                     if (questDetails) {
                         const questData = {
                             quest_id: questDetails.id,
-                            quest_name: questDetails.name || `Quest ${questDetails.id}`,
+                            quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
                             area_id: questDetails.area?.id || null,
-                            area_name: questDetails.area?.name || null,
+                            area_name: extractEnglishText(questDetails.area?.name) || null,
                             category_id: questDetails.category?.id || null,
-                            category_name: questDetails.category?.name || null,
+                            category_name: extractEnglishText(questDetails.category?.name) || null,
                             type_id: questDetails.type?.id || null,
-                            type_name: questDetails.type?.name || null,
+                            type_name: extractEnglishText(questDetails.type?.name) || null,
                             expansion_name: range.name,
                             is_seasonal: questDetails.id > 60000
                         };
@@ -1269,13 +1276,13 @@ app.post('/api/sync-quests', requireAuth, async (req, res) => {
                             if (questDetails) {
                                 const questData = {
                                     quest_id: questDetails.id,
-                                    quest_name: questDetails.name || `Quest ${questDetails.id}`,
+                                    quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
                                     area_id: questDetails.area?.id || null,
-                                    area_name: questDetails.area?.name || null,
+                                    area_name: extractEnglishText(questDetails.area?.name) || null,
                                     category_id: questDetails.category?.id || null,
-                                    category_name: questDetails.category?.name || null,
+                                    category_name: extractEnglishText(questDetails.category?.name) || null,
                                     type_id: questDetails.type?.id || null,
-                                    type_name: questDetails.type?.name || null,
+                                    type_name: extractEnglishText(questDetails.type?.name) || null,
                                     expansion_name: determineExpansionFromQuest(questDetails) || null,
                                     is_seasonal: questDetails.id > 60000
                                 };
@@ -1528,13 +1535,13 @@ app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
                     if (questDetails) {
                         const questData = {
                             quest_id: questDetails.id,
-                            quest_name: questDetails.name || `Quest ${questDetails.id}`,
+                            quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
                             area_id: questDetails.area?.id || null,
-                            area_name: questDetails.area?.name || null,
+                            area_name: extractEnglishText(questDetails.area?.name) || null,
                             category_id: questDetails.category?.id || null,
-                            category_name: questDetails.category?.name || null,
+                            category_name: extractEnglishText(questDetails.category?.name) || null,
                             type_id: questDetails.type?.id || null,
-                            type_name: questDetails.type?.name || null,
+                            type_name: extractEnglishText(questDetails.type?.name) || null,
                             expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
                             is_seasonal: questDetails.id > 60000
                         };
