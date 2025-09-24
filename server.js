@@ -631,7 +631,10 @@ async function backgroundQuestDiscovery(region, accessToken, maxQuests = 2000) {
         { start: 38000, end: 48000, name: 'Legion', sample: 100 },
         { start: 46000, end: 58000, name: 'Battle for Azeroth', sample: 120 },
         { start: 57000, end: 66000, name: 'Shadowlands', sample: 90 },
-        { start: 65000, end: 85000, name: 'Dragonflight & War Within', sample: 200 }
+        { start: 65000, end: 82000, name: 'Dragonflight', sample: 150 },
+        { start: 80000, end: 95000, name: 'The War Within', sample: 150 },
+        // Future-proofing: Adaptive high-range scanning
+        { start: 93000, end: 120000, name: 'Future Content', sample: 200 }
     ];
 
     let totalProcessed = 0;
