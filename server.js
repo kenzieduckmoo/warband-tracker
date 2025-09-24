@@ -712,7 +712,7 @@ async function backgroundQuestDiscovery(region, accessToken, maxQuests = 2000) {
     }
 }
 
-// Periodic quest discovery service (runs every 6 hours)
+// Periodic quest discovery service (runs every 2 hours)
 let questDiscoveryInterval = null;
 
 async function startPeriodicQuestDiscovery() {
@@ -729,7 +729,7 @@ async function startPeriodicQuestDiscovery() {
             // Run background discovery with smaller batches for periodic runs
             await backgroundQuestDiscovery('us', accessToken, 500);
 
-            console.log('⏰ Next quest discovery in 6 hours...');
+            console.log('⏰ Next quest discovery in 2 hours...');
         } catch (error) {
             console.error('❌ Periodic quest discovery error:', error);
         }
@@ -739,7 +739,7 @@ async function startPeriodicQuestDiscovery() {
     setTimeout(runDiscovery, 30000); // 30 second delay after server start
 
     // Then run every 2 hours
-    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 1000);
+    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 234);
 }
 
 function stopPeriodicQuestDiscovery() {
@@ -1607,6 +1607,14 @@ app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
         }
 
         console.log(`Quick sampling complete. Background discovery running...`);
+
+        // Update quest zone summaries after adding new quests
+        try {
+            await database.updateZoneQuestSummary(userId);
+            console.log('Updated quest zone summaries after cache population');
+        } catch (summaryErr) {
+            console.error('Failed to update quest zone summaries:', summaryErr.message);
+        }
 
         // Update quest sync time
         await database.updateQuestSyncTime(userId);

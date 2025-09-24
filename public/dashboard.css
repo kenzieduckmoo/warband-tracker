@@ -1060,31 +1060,6 @@ body {
     grid-column: span 2;
 }
 
-.expansion-filter {
-    margin-bottom: 20px;
-}
-
-.expansion-filter select {
-    padding: 8px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-    background: rgba(0, 0, 0, 0.5);
-    color: #e0e0e0;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.3s;
-}
-
-.expansion-filter select:hover {
-    border-color: #00aeff;
-    box-shadow: 0 0 8px rgba(0, 174, 255, 0.3);
-}
-
-.expansion-filter select:focus {
-    outline: none;
-    border-color: #00aeff;
-    box-shadow: 0 0 12px rgba(0, 174, 255, 0.4);
-}
 
 .zone-completion-list {
     display: grid;

@@ -80,8 +80,37 @@ async function loadCharacters() {
         charactersData = await response.json();
         console.log('Loaded characters:', charactersData); // Debug log to see what we got
         displayCharacters();
-        
-        // Auto-select first character if available
+
+        // Check for character hash in URL (from dashboard links)
+        const hash = window.location.hash.substring(1); // Remove the #
+        let targetCharacter = null;
+
+        if (hash) {
+            // Look for character by the hash format (realm-name format)
+            targetCharacter = charactersData.find(char =>
+                char.id === hash ||
+                char.id.toLowerCase() === hash.toLowerCase()
+            );
+
+            if (targetCharacter) {
+                console.log(`Found character from hash: ${hash}`, targetCharacter);
+                selectCharacter(targetCharacter);
+
+                // Scroll to the character in the sidebar
+                setTimeout(() => {
+                    const charElement = document.querySelector(`[data-char-id="${targetCharacter.id}"]`);
+                    if (charElement) {
+                        charElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+
+                // Clear the hash from URL after navigation
+                window.history.replaceState({}, document.title, '/characters');
+                return;
+            }
+        }
+
+        // Auto-select first character if no hash or hash not found
         if (charactersData.length > 0) {
             selectCharacter(charactersData[0]);
         }

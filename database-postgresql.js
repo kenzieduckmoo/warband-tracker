@@ -1257,6 +1257,7 @@ const dbHelpers = {
             const result = await client.query(`
                 SELECT
                     q.area_name as zone_name,
+                    q.area_id,
                     q.expansion_name,
                     COUNT(q.quest_id) as total_quests,
                     COUNT(wq.quest_id) as completed_quests,
@@ -1265,7 +1266,7 @@ const dbHelpers = {
                 FROM quest_master_cache q
                 LEFT JOIN warband_completed_quests wq ON q.quest_id = wq.quest_id AND wq.user_id = $1
                 WHERE q.area_name IS NOT NULL AND q.area_name != ''
-                GROUP BY q.area_name, q.expansion_name
+                GROUP BY q.area_name, q.area_id, q.expansion_name
                 HAVING COUNT(q.quest_id) - COUNT(wq.quest_id) > 0
                 ORDER BY incomplete_quests DESC, q.area_name
             `, [userId]);

@@ -78,8 +78,7 @@ async function loadDashboardData() {
         // Set up filter buttons
         setupFilterButtons();
 
-        // Set up expansion filter
-        setupExpansionFilter();
+        // Expansion filter removed - no longer needed
 
         // Render all dashboard sections
         renderStats();
