@@ -28,6 +28,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Set up event listeners
     document.getElementById('refresh-btn').addEventListener('click', refreshAllData);
+    document.getElementById('sync-quests-btn').addEventListener('click', syncQuests);
+    document.getElementById('populate-quest-cache-btn').addEventListener('click', populateQuestCache);
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('update-recipe-cache-btn').addEventListener('click', updateRecipeCache);
     document.getElementById('region-select').addEventListener('change', handleRegionChange);
@@ -59,7 +61,7 @@ async function loadDashboardData() {
             fetch('/api/wow-token'),
             fetch('/api/missing-profession-coverage'),
             fetch('/api/notes-all'),
-            fetch('/api/quest-zones-summary')
+            fetch('/api/incomplete-quests-by-zone')
         ]);
         
         allCharactersData = await charactersRes.json();
@@ -68,7 +70,8 @@ async function loadDashboardData() {
         tokenData = await tokenRes.json();
         missingCoverageData = await missingCoverageRes.json();
         notesData = await notesRes.json();
-        questZonesData = await questZonesRes.json();
+        const questZonesResult = await questZonesRes.json();
+        questZonesData = questZonesResult.zones || [];
 
         // Apply default filter to characters
         applyLevelFilter(currentFilter);
@@ -127,6 +130,81 @@ async function updateRecipeCache() {
     } finally {
         updateBtn.innerHTML = '🔄 Update Recipe Cache';
         updateBtn.disabled = false;
+    }
+}
+
+// Sync quest data for all characters
+async function syncQuests() {
+    const syncBtn = document.getElementById('sync-quests-btn');
+    syncBtn.innerHTML = '<span class="loading-spinner"></span> Syncing Quests...';
+    syncBtn.disabled = true;
+
+    try {
+        const response = await fetch('/api/sync-quests', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Quest sync result:', result);
+
+            if (result.charactersProcessed === 0) {
+                showSuccessMessage(`Quest data is up to date (last synced: ${new Date(result.lastSync).toLocaleString()})`);
+            } else {
+                showSuccessMessage(`Quest sync completed! Processed ${result.charactersProcessed} characters with ${result.totalQuests} total quests.`);
+                // Reload dashboard data to show updated quest zone tracking
+                await loadDashboardData();
+            }
+        } else {
+            throw new Error('Failed to sync quests');
+        }
+    } catch (error) {
+        console.error('Failed to sync quests:', error);
+        showError('Failed to sync quest data. Please try again.');
+    } finally {
+        syncBtn.innerHTML = '🗡️ Sync Quests';
+        syncBtn.disabled = false;
+    }
+}
+
+// Populate quest master cache from Blizzard API
+async function populateQuestCache() {
+    const populateBtn = document.getElementById('populate-quest-cache-btn');
+    populateBtn.innerHTML = '<span class="loading-spinner"></span> Populating Quest Cache...';
+    populateBtn.disabled = true;
+
+    try {
+        const response = await fetch('/api/populate-quest-cache', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Quest cache populate result:', result);
+
+            showSuccessMessage(
+                `Quest cache populated successfully! ` +
+                `Processed ${result.results.questsProcessed}/${result.results.totalQuests} quests, ` +
+                `${result.results.areas} areas, ${result.results.categories} categories, ${result.results.types} types.`
+            );
+
+            // Reload dashboard data to show updated zone tracking
+            await loadDashboardData();
+        } else {
+            throw new Error('Failed to populate quest cache');
+        }
+    } catch (error) {
+        console.error('Failed to populate quest cache:', error);
+        showError('Failed to populate quest cache. This is a large operation and may take several minutes.');
+    } finally {
+        populateBtn.innerHTML = '📚 Populate Quest Cache';
+        populateBtn.disabled = false;
     }
 }
 
@@ -849,17 +927,12 @@ function renderQuestZones() {
     }
 
     if (!filteredZones || filteredZones.length === 0) {
-        container.innerHTML = '<div class="no-data">No quest data available yet. Refresh your character data to populate quest completion information.</div>';
+        container.innerHTML = '<div class="no-data">No incomplete quest zones found. Either all zones are complete or you need to populate the quest cache and sync quest data first.</div>';
         return;
     }
 
-    // Sort by completion count (descending), then by total quests (descending)
-    filteredZones.sort((a, b) => {
-        if (b.completed_quests !== a.completed_quests) {
-            return b.completed_quests - a.completed_quests;
-        }
-        return b.total_quests - a.total_quests;
-    });
+    // Data is already sorted by incomplete_quests DESC from the database query
+    // No additional sorting needed
 
     let html = '';
     filteredZones.forEach(zone => {
@@ -871,6 +944,7 @@ function renderQuestZones() {
                 <div class="zone-header">
                     <span class="zone-name">${zone.zone_name}</span>
                     <span class="zone-expansion">${zone.expansion_name}</span>
+                    <span class="zone-incomplete-count">${zone.incomplete_quests} incomplete</span>
                 </div>
                 <div class="zone-completion">
                     <div class="completion-bar">

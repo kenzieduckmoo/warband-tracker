@@ -105,7 +105,8 @@ async function initDatabase() {
                 email TEXT,
                 region TEXT DEFAULT 'us',
                 last_login TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                quest_sync_time TIMESTAMP DEFAULT NULL
             )
         `);
 
@@ -226,16 +227,49 @@ async function initDatabase() {
             )
         `);
 
-        // Quest tracking tables
+        // Quest tracking tables - comprehensive quest database
         await client.query(`
-            CREATE TABLE IF NOT EXISTS cached_quests (
+            CREATE TABLE IF NOT EXISTS quest_master_cache (
                 id SERIAL PRIMARY KEY,
                 quest_id INTEGER UNIQUE NOT NULL,
                 quest_name TEXT NOT NULL,
-                zone_name TEXT NOT NULL,
-                expansion_name TEXT NOT NULL,
-                category TEXT,
+                area_id INTEGER,
+                area_name TEXT,
+                category_id INTEGER,
+                category_name TEXT,
+                type_id INTEGER,
+                type_name TEXT,
+                expansion_name TEXT,
                 is_seasonal BOOLEAN DEFAULT FALSE,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Quest metadata tables
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS quest_areas (
+                id SERIAL PRIMARY KEY,
+                area_id INTEGER UNIQUE NOT NULL,
+                area_name TEXT NOT NULL,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS quest_categories (
+                id SERIAL PRIMARY KEY,
+                category_id INTEGER UNIQUE NOT NULL,
+                category_name TEXT NOT NULL,
+                cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS quest_types (
+                id SERIAL PRIMARY KEY,
+                type_id INTEGER UNIQUE NOT NULL,
+                type_name TEXT NOT NULL,
                 cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
@@ -1089,6 +1123,151 @@ const dbHelpers = {
         try {
             await client.query('DELETE FROM cached_quests');
             console.log('Cleared quest cache');
+        } finally {
+            client.release();
+        }
+    },
+
+    // Quest sync time tracking
+    getLastQuestSyncTime: async function(userId) {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(
+                'SELECT quest_sync_time FROM users WHERE id = $1',
+                [userId]
+            );
+            return result.rows[0]?.quest_sync_time || null;
+        } finally {
+            client.release();
+        }
+    },
+
+    updateQuestSyncTime: async function(userId) {
+        const client = await pool.connect();
+        try {
+            await client.query(
+                'UPDATE users SET quest_sync_time = CURRENT_TIMESTAMP WHERE id = $1',
+                [userId]
+            );
+        } finally {
+            client.release();
+        }
+    },
+
+    // Quest Master Cache functions
+    upsertQuestArea: async function(areaId, areaName) {
+        const client = await pool.connect();
+        try {
+            await client.query(`
+                INSERT INTO quest_areas (area_id, area_name)
+                VALUES ($1, $2)
+                ON CONFLICT (area_id)
+                DO UPDATE SET area_name = EXCLUDED.area_name, cached_at = CURRENT_TIMESTAMP
+            `, [areaId, areaName]);
+        } finally {
+            client.release();
+        }
+    },
+
+    upsertQuestCategory: async function(categoryId, categoryName) {
+        const client = await pool.connect();
+        try {
+            await client.query(`
+                INSERT INTO quest_categories (category_id, category_name)
+                VALUES ($1, $2)
+                ON CONFLICT (category_id)
+                DO UPDATE SET category_name = EXCLUDED.category_name, cached_at = CURRENT_TIMESTAMP
+            `, [categoryId, categoryName]);
+        } finally {
+            client.release();
+        }
+    },
+
+    upsertQuestType: async function(typeId, typeName) {
+        const client = await pool.connect();
+        try {
+            await client.query(`
+                INSERT INTO quest_types (type_id, type_name)
+                VALUES ($1, $2)
+                ON CONFLICT (type_id)
+                DO UPDATE SET type_name = EXCLUDED.type_name, cached_at = CURRENT_TIMESTAMP
+            `, [typeId, typeName]);
+        } finally {
+            client.release();
+        }
+    },
+
+    upsertQuestMaster: async function(questData) {
+        const client = await pool.connect();
+        try {
+            await client.query(`
+                INSERT INTO quest_master_cache (
+                    quest_id, quest_name, area_id, area_name, category_id, category_name,
+                    type_id, type_name, expansion_name, is_seasonal
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                ON CONFLICT (quest_id)
+                DO UPDATE SET
+                    quest_name = EXCLUDED.quest_name,
+                    area_id = EXCLUDED.area_id,
+                    area_name = EXCLUDED.area_name,
+                    category_id = EXCLUDED.category_id,
+                    category_name = EXCLUDED.category_name,
+                    type_id = EXCLUDED.type_id,
+                    type_name = EXCLUDED.type_name,
+                    expansion_name = EXCLUDED.expansion_name,
+                    is_seasonal = EXCLUDED.is_seasonal,
+                    last_updated = CURRENT_TIMESTAMP
+            `, [
+                questData.quest_id,
+                questData.quest_name,
+                questData.area_id,
+                questData.area_name,
+                questData.category_id,
+                questData.category_name,
+                questData.type_id,
+                questData.type_name,
+                questData.expansion_name,
+                questData.is_seasonal
+            ]);
+        } finally {
+            client.release();
+        }
+    },
+
+    getIncompleteQuestsByZone: async function(userId) {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(`
+                SELECT
+                    q.area_name as zone_name,
+                    q.expansion_name,
+                    COUNT(q.quest_id) as total_quests,
+                    COUNT(wq.quest_id) as completed_quests,
+                    COUNT(q.quest_id) - COUNT(wq.quest_id) as incomplete_quests,
+                    ROUND((COUNT(wq.quest_id)::decimal / COUNT(q.quest_id)) * 100, 2) as completion_percentage
+                FROM quest_master_cache q
+                LEFT JOIN warband_completed_quests wq ON q.quest_id = wq.quest_id AND wq.user_id = $1
+                WHERE q.area_name IS NOT NULL AND q.area_name != ''
+                GROUP BY q.area_name, q.expansion_name
+                HAVING COUNT(q.quest_id) - COUNT(wq.quest_id) > 0
+                ORDER BY incomplete_quests DESC, q.area_name
+            `, [userId]);
+
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
+    clearQuestMasterCache: async function() {
+        const client = await pool.connect();
+        try {
+            await client.query('DELETE FROM quest_master_cache');
+            await client.query('DELETE FROM quest_areas');
+            await client.query('DELETE FROM quest_categories');
+            await client.query('DELETE FROM quest_types');
+            console.log('Cleared quest master cache');
         } finally {
             client.release();
         }

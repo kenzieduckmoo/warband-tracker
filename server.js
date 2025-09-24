@@ -433,22 +433,78 @@ async function fetchCharacterCompletedQuests(region, realmSlug, characterName, a
     }
 }
 
-// Helper function to fetch quest details from API
+// Quest API fetcher functions for building comprehensive quest database
+async function fetchQuestIndex(region, accessToken) {
+    try {
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/quest/index?namespace=static-${region}`,
+            {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            }
+        );
+        return response.data.quests || [];
+    } catch (error) {
+        console.error('Failed to fetch quest index:', error.message);
+        return [];
+    }
+}
+
+async function fetchQuestAreasIndex(region, accessToken) {
+    try {
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/quest/area/index?namespace=static-${region}`,
+            {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            }
+        );
+        return response.data.quest_areas || [];
+    } catch (error) {
+        console.error('Failed to fetch quest areas index:', error.message);
+        return [];
+    }
+}
+
+async function fetchQuestCategoriesIndex(region, accessToken) {
+    try {
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/quest/category/index?namespace=static-${region}`,
+            {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            }
+        );
+        return response.data.quest_categories || [];
+    } catch (error) {
+        console.error('Failed to fetch quest categories index:', error.message);
+        return [];
+    }
+}
+
+async function fetchQuestTypesIndex(region, accessToken) {
+    try {
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/quest/type/index?namespace=static-${region}`,
+            {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            }
+        );
+        return response.data.quest_types || [];
+    } catch (error) {
+        console.error('Failed to fetch quest types index:', error.message);
+        return [];
+    }
+}
+
 async function fetchQuestDetails(region, questId, accessToken) {
     try {
         const response = await axios.get(
             `https://${region}.api.blizzard.com/data/wow/quest/${questId}?namespace=static-${region}`,
             {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`
-                }
+                headers: { 'Authorization': `Bearer ${accessToken}` }
             }
         );
-
         return response.data;
     } catch (error) {
-        // Quest might not exist in static data (this is the known API issue)
-        return null;
+        return null; // Quest not found in static data
     }
 }
 
@@ -760,23 +816,7 @@ app.get('/api/characters', requireAuth, async (req, res) => {
                         // Save to database for this user
                         await database.upsertCharacter(userId, characterData);
 
-                        // Fetch and save quest completion data
-                        try {
-                            const completedQuests = await fetchCharacterCompletedQuests(
-                                userRegion,
-                                char.realm.slug,
-                                char.name,
-                                req.session.accessToken
-                            );
-
-                            for (const quest of completedQuests) {
-                                await database.upsertCompletedQuest(userId, quest.id);
-                            }
-
-                            console.log(`Saved ${completedQuests.length} completed quests for ${char.name}`);
-                        } catch (questErr) {
-                            console.error(`Failed to get quests for ${char.name}:`, questErr.message);
-                        }
+                        // Quest data is now synced separately to avoid rate limiting
 
                         characters.push(characterData);
                     } catch (err) {
@@ -937,6 +977,77 @@ app.get('/api/characters-cached', requireAuth, async (req, res) => {
     }
 });
 
+// Quest sync endpoint - separate from character refresh to avoid rate limiting
+app.post('/api/sync-quests', requireAuth, async (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+
+    try {
+        const userId = req.session.userId;
+        const userRegion = await getUserRegionForAPI(userId);
+
+        // Check if quest sync was done recently (within 6 hours)
+        const lastQuestSync = await database.getLastQuestSyncTime(userId);
+        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+
+        if (lastQuestSync && lastQuestSync > sixHoursAgo) {
+            return res.json({
+                message: 'Quest data is up to date',
+                lastSync: lastQuestSync,
+                charactersProcessed: 0
+            });
+        }
+
+        // Get user's characters
+        const characters = await database.getAllCharacters(userId);
+        let charactersProcessed = 0;
+        let totalQuests = 0;
+
+        for (const character of characters) {
+            try {
+                // Add delay between characters to respect rate limits
+                if (charactersProcessed > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+                }
+
+                const completedQuests = await fetchCharacterCompletedQuests(
+                    userRegion,
+                    character.realm_slug,
+                    character.name,
+                    req.session.accessToken
+                );
+
+                // Save quest data
+                for (const quest of completedQuests) {
+                    await database.upsertCompletedQuest(userId, quest.id);
+                }
+
+                charactersProcessed++;
+                totalQuests += completedQuests.length;
+
+                console.log(`Synced ${completedQuests.length} quests for ${character.name}`);
+
+            } catch (questErr) {
+                console.error(`Failed to sync quests for ${character.name}:`, questErr.message);
+                // Continue with other characters even if one fails
+            }
+        }
+
+        // Update last sync time
+        await database.updateQuestSyncTime(userId);
+
+        res.json({
+            message: 'Quest sync completed',
+            charactersProcessed,
+            totalQuests,
+            lastSync: new Date()
+        });
+
+    } catch (error) {
+        console.error('Quest sync failed:', error);
+        res.status(500).json({ error: 'Failed to sync quest data' });
+    }
+});
+
 // Recipe cache update endpoint - user-scoped
 app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
     try {
@@ -1062,6 +1173,126 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
             error: 'Failed to update recipe cache',
             details: error.message
         });
+    }
+});
+
+// Quest Master Cache population endpoint
+app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const userRegion = await getUserRegionForAPI(userId);
+        const accessToken = await getClientCredentialsToken(userRegion);
+
+        console.log('Starting quest cache population...');
+
+        // Step 1: Populate quest areas
+        const areas = await fetchQuestAreasIndex(userRegion, accessToken);
+        for (const area of areas) {
+            await database.upsertQuestArea(area.id, area.name);
+        }
+        console.log(`Cached ${areas.length} quest areas`);
+
+        // Step 2: Populate quest categories
+        const categories = await fetchQuestCategoriesIndex(userRegion, accessToken);
+        for (const category of categories) {
+            await database.upsertQuestCategory(category.id, category.name);
+        }
+        console.log(`Cached ${categories.length} quest categories`);
+
+        // Step 3: Populate quest types
+        const types = await fetchQuestTypesIndex(userRegion, accessToken);
+        for (const type of types) {
+            await database.upsertQuestType(type.id, type.name);
+        }
+        console.log(`Cached ${types.length} quest types`);
+
+        // Step 4: Get all quests from index
+        const questsIndex = await fetchQuestIndex(userRegion, accessToken);
+        console.log(`Found ${questsIndex.length} quests to process`);
+
+        let processed = 0;
+        let failed = 0;
+
+        // Process quests in batches to avoid overwhelming the API
+        for (let i = 0; i < questsIndex.length; i += 50) {
+            const batch = questsIndex.slice(i, i + 50);
+
+            for (const questRef of batch) {
+                try {
+                    const questDetails = await fetchQuestDetails(userRegion, questRef.id, accessToken);
+
+                    if (questDetails) {
+                        // Extract and structure quest data
+                        const questData = {
+                            quest_id: questDetails.id,
+                            quest_name: questDetails.name || `Quest ${questDetails.id}`,
+                            area_id: questDetails.area?.id || null,
+                            area_name: questDetails.area?.name || null,
+                            category_id: questDetails.category?.id || null,
+                            category_name: questDetails.category?.name || null,
+                            type_id: questDetails.type?.id || null,
+                            type_name: questDetails.type?.name || null,
+                            expansion_name: determineExpansionFromQuest(questDetails) || null,
+                            is_seasonal: questDetails.id > 60000 // Heuristic for seasonal quests
+                        };
+
+                        await database.upsertQuestMaster(questData);
+                        processed++;
+                    } else {
+                        failed++;
+                    }
+
+                    // Small delay to respect rate limits
+                    if (processed % 10 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                } catch (error) {
+                    failed++;
+                    console.error(`Failed to process quest ${questRef.id}:`, error.message);
+                }
+            }
+
+            console.log(`Processed batch ${i/50 + 1}/${Math.ceil(questsIndex.length/50)} - Success: ${processed}, Failed: ${failed}`);
+
+            // Longer pause between batches
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        console.log('Quest cache population completed');
+        res.json({
+            message: 'Quest cache populated successfully',
+            results: {
+                areas: areas.length,
+                categories: categories.length,
+                types: types.length,
+                questsProcessed: processed,
+                questsFailed: failed,
+                totalQuests: questsIndex.length
+            }
+        });
+
+    } catch (error) {
+        console.error('Quest cache population error:', error);
+        res.status(500).json({
+            error: 'Failed to populate quest cache',
+            details: error.message
+        });
+    }
+});
+
+// Get incomplete quests by zone - for dashboard display
+app.get('/api/incomplete-quests-by-zone', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const incompleteZones = await database.getIncompleteQuestsByZone(userId);
+
+        res.json({
+            zones: incompleteZones,
+            totalZones: incompleteZones.length
+        });
+    } catch (error) {
+        console.error('Failed to get incomplete quests by zone:', error);
+        res.status(500).json({ error: 'Failed to get zone completion data' });
     }
 });
 
