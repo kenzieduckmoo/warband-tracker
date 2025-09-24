@@ -1249,9 +1249,12 @@ app.post('/api/sync-quests', requireAuth, async (req, res) => {
                     await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
                 }
 
+                // Convert realm name to proper slug format for Battle.net API
+                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '-').replace(/[^a-z0-9-]/g, '');
+
                 const completedQuests = await fetchCharacterCompletedQuests(
                     userRegion,
-                    character.realm_slug,
+                    realmSlug,
                     character.name,
                     req.session.accessToken
                 );
@@ -1492,9 +1495,12 @@ app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
 
+                // Convert realm name to proper slug format for Battle.net API
+                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '-').replace(/[^a-z0-9-]/g, '');
+
                 const completedQuests = await fetchCharacterCompletedQuests(
                     userRegion,
-                    character.realm_slug,
+                    realmSlug,
                     character.name,
                     req.session.accessToken
                 );
@@ -1591,9 +1597,15 @@ app.get('/api/incomplete-quests-by-zone', requireAuth, async (req, res) => {
         const userId = req.session.userId;
         const incompleteZones = await database.getIncompleteQuestsByZone(userId);
 
+        // Process zone names to extract English text from localized JSON
+        const processedZones = incompleteZones.map(zone => ({
+            ...zone,
+            zone_name: extractEnglishText(zone.zone_name) || zone.zone_name
+        }));
+
         res.json({
-            zones: incompleteZones,
-            totalZones: incompleteZones.length
+            zones: processedZones,
+            totalZones: processedZones.length
         });
     } catch (error) {
         console.error('Failed to get incomplete quests by zone:', error);
