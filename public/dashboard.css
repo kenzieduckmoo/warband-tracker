@@ -102,7 +102,7 @@ body {
     box-shadow: 0 0 12px rgba(0, 174, 255, 0.4);
 }
 
-.btn-refresh, .btn-logout, .btn-link, .header-info .btn-update-cache, .btn-sync-quests, .btn-populate-quest-cache {
+.btn-refresh, .btn-logout, .btn-link, .header-info .btn-update-cache, .btn-populate-quest-cache {
     padding: 8px 16px;
     border: none;
     border-radius: 6px;
@@ -131,7 +131,7 @@ body {
     border: 1px solid #ff453a;
 }
 
-.btn-refresh:hover, .btn-link:hover, .btn-logout:hover, .header-info .btn-update-cache:hover, .btn-sync-quests:hover, .btn-populate-quest-cache:hover {
+.btn-refresh:hover, .btn-link:hover, .btn-logout:hover, .header-info .btn-update-cache:hover, .btn-populate-quest-cache:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 174, 255, 0.3);
 }
@@ -297,30 +297,6 @@ body {
     box-shadow: none;
 }
 
-.btn-sync-quests {
-    padding: 8px 16px;
-    background: rgba(139, 69, 19, 0.2);
-    color: #daa520;
-    border: 1px solid #daa520;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: all 0.3s;
-    white-space: nowrap;
-}
-
-.btn-sync-quests:hover {
-    background: rgba(218, 165, 32, 0.3);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(218, 165, 32, 0.3);
-}
-
-.btn-sync-quests:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
 
 .btn-populate-quest-cache {
     padding: 8px 16px;
@@ -334,28 +310,10 @@ body {
     white-space: nowrap;
 }
 
-.btn-cleanup-zones {
-    padding: 8px 16px;
-    background: rgba(255, 140, 0, 0.2);
-    color: #ff8c00;
-    border: 1px solid #ff8c00;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: all 0.3s;
-    white-space: nowrap;
-}
-
 .btn-populate-quest-cache:hover {
     background: rgba(147, 112, 219, 0.3);
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(147, 112, 219, 0.3);
-}
-
-.btn-cleanup-zones:hover {
-    background: rgba(255, 140, 0, 0.3);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
 }
 
 .btn-populate-quest-cache:disabled {

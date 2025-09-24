@@ -735,8 +735,8 @@ async function startPeriodicQuestDiscovery() {
     // Run immediately on startup (after a short delay)
     setTimeout(runDiscovery, 30000); // 30 second delay after server start
 
-    // Then run every 6 hours
-    questDiscoveryInterval = setInterval(runDiscovery, 6 * 60 * 60 * 1000);
+    // Then run every 2 hours
+    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 1000);
 }
 
 function stopPeriodicQuestDiscovery() {
@@ -1076,10 +1076,103 @@ app.get('/api/characters', requireAuth, async (req, res) => {
             console.error('Failed to update quest zone summaries:', summaryErr.message);
         }
 
+        // Sync quest completion data (with rate limiting)
+        let questSyncResult = { charactersProcessed: 0, totalQuests: 0, questsContributedToDatabase: 0 };
+        try {
+            // Check if quest sync was done recently (within 6 hours)
+            const lastQuestSync = await database.getLastQuestSyncTime(userId);
+            const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+
+            if (!lastQuestSync || lastQuestSync <= sixHoursAgo) {
+                console.log('Syncing quest completion data...');
+                let charactersProcessed = 0;
+                let totalQuests = 0;
+                let totalQuestsAddedToSharedDatabase = 0;
+
+                for (const character of characters) {
+                    try {
+                        // Add delay between characters to respect rate limits
+                        if (charactersProcessed > 0) {
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+                        }
+
+                        // Convert realm name to proper format for Battle.net API
+                        const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
+
+                        const completedQuests = await fetchCharacterCompletedQuests(
+                            userRegion,
+                            realmSlug,
+                            character.name,
+                            req.session.accessToken
+                        );
+
+                        // Save completed quest data for this user
+                        for (const quest of completedQuests) {
+                            await database.upsertCompletedQuest(userId, quest.id);
+                        }
+
+                        // Add quests to shared database for community benefit
+                        let questsAddedToDatabase = 0;
+                        for (const quest of completedQuests) {
+                            try {
+                                const existingQuest = await database.getQuestFromMaster(quest.id);
+                                if (!existingQuest) {
+                                    const questDetails = await fetchQuestDetails(userRegion, quest.id, req.session.accessToken);
+                                    if (questDetails) {
+                                        const questData = {
+                                            quest_id: questDetails.id,
+                                            quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
+                                            area_id: questDetails.area?.id || null,
+                                            area_name: extractEnglishText(questDetails.area?.name) || null,
+                                            category_id: questDetails.category?.id || null,
+                                            category_name: extractEnglishText(questDetails.category?.name) || null,
+                                            type_id: questDetails.type?.id || null,
+                                            type_name: extractEnglishText(questDetails.type?.name) || null,
+                                            expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
+                                            is_seasonal: questDetails.id > 60000
+                                        };
+                                        await database.upsertQuestMaster(questData);
+                                        questsAddedToDatabase++;
+                                    }
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                }
+                            } catch (questErr) {
+                                // Skip quest details fetch errors
+                            }
+                        }
+
+                        totalQuests += completedQuests.length;
+                        totalQuestsAddedToSharedDatabase += questsAddedToDatabase;
+                        charactersProcessed++;
+
+                        console.log(`${character.name}: ${completedQuests.length} quests, ${questsAddedToDatabase} contributed to database`);
+
+                    } catch (charErr) {
+                        console.error(`Failed to sync quests for ${character.name}:`, charErr.message);
+                    }
+                }
+
+                // Update quest sync timestamp
+                await database.updateQuestSyncTime(userId);
+
+                questSyncResult = {
+                    charactersProcessed,
+                    totalQuests,
+                    questsContributedToDatabase: totalQuestsAddedToSharedDatabase
+                };
+
+                console.log(`Quest sync completed: ${charactersProcessed} characters, ${totalQuests} total quests, ${totalQuestsAddedToSharedDatabase} contributed to shared database`);
+            } else {
+                console.log('Quest sync skipped - data is recent');
+            }
+        } catch (questErr) {
+            console.error('Failed to sync quest data:', questErr.message);
+        }
+
         // Sort by item level
         characters.sort((a, b) => (b.averageItemLevel || 0) - (a.averageItemLevel || 0));
 
-        res.json(characters);
+        res.json({ characters, questSync: questSyncResult });
     } catch (error) {
         console.error('API error:', error.response?.data || error.message);
         if (error.response?.status === 401) {
@@ -1216,122 +1309,6 @@ app.get('/api/characters-cached', requireAuth, async (req, res) => {
     }
 });
 
-// Quest sync endpoint - separate from character refresh to avoid rate limiting
-app.post('/api/sync-quests', requireAuth, async (req, res) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-
-    try {
-        const userId = req.session.userId;
-        const userRegion = await getUserRegionForAPI(userId);
-
-        // Check if quest sync was done recently (within 6 hours)
-        const lastQuestSync = await database.getLastQuestSyncTime(userId);
-        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-
-        if (lastQuestSync && lastQuestSync > sixHoursAgo) {
-            return res.json({
-                message: 'Quest data is up to date',
-                lastSync: lastQuestSync,
-                charactersProcessed: 0
-            });
-        }
-
-        // Get user's characters
-        const characters = await database.getAllCharacters(userId);
-        let charactersProcessed = 0;
-        let totalQuests = 0;
-        let totalQuestsAddedToSharedDatabase = 0;
-
-        for (const character of characters) {
-            try {
-                // Add delay between characters to respect rate limits
-                if (charactersProcessed > 0) {
-                    await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
-                }
-
-                // Convert realm name to proper format for Battle.net API
-                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
-
-                const completedQuests = await fetchCharacterCompletedQuests(
-                    userRegion,
-                    realmSlug,
-                    character.name,
-                    req.session.accessToken
-                );
-
-                // Save completed quest data for this user
-                for (const quest of completedQuests) {
-                    await database.upsertCompletedQuest(userId, quest.id);
-                }
-
-                // ENHANCEMENT: Add these quests to the shared quest database
-                // This helps build a comprehensive quest database for ALL users
-                let questsAddedToDatabase = 0;
-                for (const quest of completedQuests) {
-                    try {
-                        // Check if we already have this quest in the master database
-                        const existingQuest = await database.getQuestFromMaster(quest.id);
-
-                        if (!existingQuest) {
-                            // Get quest details and add to shared database
-                            const questDetails = await fetchQuestDetails(userRegion, quest.id, accessToken);
-
-                            if (questDetails) {
-                                const questData = {
-                                    quest_id: questDetails.id,
-                                    quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
-                                    area_id: questDetails.area?.id || null,
-                                    area_name: extractEnglishText(questDetails.area?.name) || null,
-                                    category_id: questDetails.category?.id || null,
-                                    category_name: extractEnglishText(questDetails.category?.name) || null,
-                                    type_id: questDetails.type?.id || null,
-                                    type_name: extractEnglishText(questDetails.type?.name) || null,
-                                    expansion_name: determineExpansionFromQuest(questDetails) || null,
-                                    is_seasonal: questDetails.id > 60000
-                                };
-
-                                await database.upsertQuestMaster(questData);
-                                questsAddedToDatabase++;
-                            }
-
-                            // Small delay to respect rate limits
-                            await new Promise(resolve => setTimeout(resolve, 50));
-                        }
-                    } catch (questErr) {
-                        // Silently continue - quest details might not be available
-                    }
-                }
-
-                charactersProcessed++;
-                totalQuests += completedQuests.length;
-                totalQuestsAddedToSharedDatabase += questsAddedToDatabase;
-
-                console.log(`Synced ${completedQuests.length} quests for ${character.name} (${questsAddedToDatabase} added to shared database)`);
-
-            } catch (questErr) {
-                console.error(`Failed to sync quests for ${character.name}:`, questErr.message);
-                // Continue with other characters even if one fails
-            }
-        }
-
-        // Update last sync time
-        await database.updateQuestSyncTime(userId);
-
-        res.json({
-            message: totalQuestsAddedToSharedDatabase > 0
-                ? `Quest sync completed! Added ${totalQuestsAddedToSharedDatabase} new quests to the shared database for all users.`
-                : 'Quest sync completed',
-            charactersProcessed,
-            totalQuests,
-            questsContributedToDatabase: totalQuestsAddedToSharedDatabase,
-            lastSync: new Date()
-        });
-
-    } catch (error) {
-        console.error('Quest sync failed:', error);
-        res.status(500).json({ error: 'Failed to sync quest data' });
-    }
-});
 
 // Recipe cache update endpoint - user-scoped
 app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
@@ -1613,22 +1590,6 @@ app.get('/api/incomplete-quests-by-zone', requireAuth, async (req, res) => {
     }
 });
 
-// Cleanup JSON zone names in database
-app.post('/api/cleanup-zone-names', requireAuth, async (req, res) => {
-    try {
-        console.log('Starting zone name cleanup...');
-        const result = await database.cleanupJsonZoneNames();
-
-        res.json({
-            message: 'Zone name cleanup completed',
-            processed: result.processed,
-            updated: result.updated
-        });
-    } catch (error) {
-        console.error('Failed to cleanup zone names:', error);
-        res.status(500).json({ error: 'Failed to cleanup zone names' });
-    }
-});
 
 // Recipe caching endpoint - admin/background job
 app.post('/api/cache-recipes', async (req, res) => {

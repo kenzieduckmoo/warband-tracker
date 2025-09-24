@@ -28,9 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Set up event listeners
     document.getElementById('refresh-btn').addEventListener('click', refreshAllData);
-    document.getElementById('sync-quests-btn').addEventListener('click', syncQuests);
     document.getElementById('populate-quest-cache-btn').addEventListener('click', populateQuestCache);
-    document.getElementById('cleanup-zone-names-btn').addEventListener('click', cleanupZoneNames);
     document.getElementById('logout-btn').addEventListener('click', logout);
     document.getElementById('update-recipe-cache-btn').addEventListener('click', updateRecipeCache);
     document.getElementById('region-select').addEventListener('change', handleRegionChange);
@@ -134,42 +132,6 @@ async function updateRecipeCache() {
     }
 }
 
-// Sync quest data for all characters
-async function syncQuests() {
-    const syncBtn = document.getElementById('sync-quests-btn');
-    syncBtn.innerHTML = '<span class="loading-spinner"></span> Syncing Quests...';
-    syncBtn.disabled = true;
-
-    try {
-        const response = await fetch('/api/sync-quests', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (response.ok) {
-            const result = await response.json();
-            console.log('Quest sync result:', result);
-
-            if (result.charactersProcessed === 0) {
-                showSuccessMessage(`Quest data is up to date (last synced: ${new Date(result.lastSync).toLocaleString()})`);
-            } else {
-                showSuccessMessage(`Quest sync completed! Processed ${result.charactersProcessed} characters with ${result.totalQuests} total quests.`);
-                // Reload dashboard data to show updated quest zone tracking
-                await loadDashboardData();
-            }
-        } else {
-            throw new Error('Failed to sync quests');
-        }
-    } catch (error) {
-        console.error('Failed to sync quests:', error);
-        showError('Failed to sync quest data. Please try again.');
-    } finally {
-        syncBtn.innerHTML = '🗡️ Sync Quests';
-        syncBtn.disabled = false;
-    }
-}
 
 // Populate quest master cache from Blizzard API
 async function populateQuestCache() {
@@ -209,44 +171,6 @@ async function populateQuestCache() {
     }
 }
 
-// Cleanup JSON zone names in database
-async function cleanupZoneNames() {
-    const cleanupBtn = document.getElementById('cleanup-zone-names-btn');
-    cleanupBtn.innerHTML = '<span class="loading-spinner"></span> Cleaning Zone Names...';
-    cleanupBtn.disabled = true;
-
-    try {
-        const response = await fetch('/api/cleanup-zone-names', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (response.ok) {
-            const result = await response.json();
-            console.log('Zone cleanup result:', result);
-
-            showSuccessMessage(
-                `Zone cleanup completed! Processed ${result.processed} records, updated ${result.updated} zone names from JSON to English text.`
-            );
-
-            // Refresh quest zone data to show the cleaned results
-            await loadDashboardData();
-
-        } else {
-            const error = await response.json();
-            console.error('Zone cleanup failed:', error);
-            showError('Failed to cleanup zone names. Please try again.');
-        }
-    } catch (error) {
-        console.error('Failed to cleanup zone names:', error);
-        showError('Failed to cleanup zone names. Please check your connection and try again.');
-    } finally {
-        cleanupBtn.innerHTML = '🧹 Cleanup Zone Names';
-        cleanupBtn.disabled = false;
-    }
-}
 
 // Show success message
 function showSuccessMessage(message) {
@@ -283,11 +207,24 @@ async function refreshAllData() {
     const refreshBtn = document.getElementById('refresh-btn');
     refreshBtn.innerHTML = '<span class="loading-spinner"></span> Refreshing...';
     refreshBtn.disabled = true;
-    
+
     try {
         // Fetch fresh data from Battle.net
         const response = await fetch('/api/characters');
         if (response.ok) {
+            const result = await response.json();
+            console.log('Refresh result:', result);
+
+            // Show quest sync results if available
+            if (result.questSync && result.questSync.charactersProcessed > 0) {
+                showSuccessMessage(
+                    `Character data refreshed successfully! Quest sync: ${result.questSync.charactersProcessed} characters processed, ` +
+                    `${result.questSync.totalQuests} total quests, ${result.questSync.questsContributedToDatabase} contributed to shared database.`
+                );
+            } else {
+                showSuccessMessage('Character data refreshed successfully! Quest data was recently synced (within 6 hours).');
+            }
+
             // Reload dashboard with fresh data
             await loadDashboardData();
         } else {
@@ -952,10 +889,42 @@ function setupExpansionFilter() {
     }
 }
 
+// Update expansion filter dropdown with actual data
+function updateExpansionFilter() {
+    const expansionFilter = document.getElementById('expansion-filter');
+    if (!expansionFilter || !questZonesData || questZonesData.length === 0) return;
+
+    // Get current selection
+    const currentSelection = expansionFilter.value;
+
+    // Get unique expansion names from the data
+    const uniqueExpansions = [...new Set(questZonesData.map(z => z.expansion_name))].sort();
+
+    // Build new options
+    let optionsHTML = '<option value="all">All Expansions</option>';
+    uniqueExpansions.forEach(expansion => {
+        optionsHTML += `<option value="${expansion}">${expansion}</option>`;
+    });
+
+    expansionFilter.innerHTML = optionsHTML;
+
+    // Restore selection if it still exists
+    if (currentSelection !== 'all' && uniqueExpansions.includes(currentSelection)) {
+        expansionFilter.value = currentSelection;
+    }
+
+    // Re-add the event listener since we rebuilt the dropdown
+    expansionFilter.removeEventListener('change', renderQuestZones);
+    expansionFilter.addEventListener('change', renderQuestZones);
+}
+
 // Render quest zones section
 function renderQuestZones() {
     const container = document.getElementById('quest-zones-list');
     if (!container) return;
+
+    // Update the expansion filter dropdown first
+    updateExpansionFilter();
 
     const expansionFilter = document.getElementById('expansion-filter');
     const selectedExpansion = expansionFilter ? expansionFilter.value : 'all';
