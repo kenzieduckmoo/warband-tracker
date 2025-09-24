@@ -1260,6 +1260,19 @@ const dbHelpers = {
         }
     },
 
+    getQuestFromMaster: async function(questId) {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(
+                'SELECT * FROM quest_master_cache WHERE quest_id = $1',
+                [questId]
+            );
+            return result.rows[0] || null;
+        } finally {
+            client.release();
+        }
+    },
+
     clearQuestMasterCache: async function() {
         const client = await pool.connect();
         try {

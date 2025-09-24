@@ -436,30 +436,51 @@ async function fetchCharacterCompletedQuests(region, realmSlug, characterName, a
 // Quest API fetcher functions for building comprehensive quest database
 async function fetchQuestIndex(region, accessToken) {
     try {
+        console.log(`Fetching quest index from: https://${region}.api.blizzard.com/data/wow/quest/index?namespace=static-${region}`);
         const response = await axios.get(
             `https://${region}.api.blizzard.com/data/wow/quest/index?namespace=static-${region}`,
             {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             }
         );
+        console.log('Quest index response structure:', {
+            status: response.status,
+            dataKeys: Object.keys(response.data),
+            dataPreview: JSON.stringify(response.data, null, 2).substring(0, 500)
+        });
         return response.data.quests || [];
     } catch (error) {
-        console.error('Failed to fetch quest index:', error.message);
+        console.error('Failed to fetch quest index:', {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data
+        });
         return [];
     }
 }
 
 async function fetchQuestAreasIndex(region, accessToken) {
     try {
+        console.log(`Fetching quest areas from: https://${region}.api.blizzard.com/data/wow/quest/area/index?namespace=static-${region}`);
         const response = await axios.get(
             `https://${region}.api.blizzard.com/data/wow/quest/area/index?namespace=static-${region}`,
             {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             }
         );
+        console.log('Quest areas response:', {
+            status: response.status,
+            dataKeys: Object.keys(response.data),
+            count: response.data.quest_areas?.length || 0
+        });
         return response.data.quest_areas || [];
     } catch (error) {
-        console.error('Failed to fetch quest areas index:', error.message);
+        console.error('Failed to fetch quest areas index:', {
+            message: error.message,
+            status: error.response?.status,
+            data: error.response?.data
+        });
         return [];
     }
 }
@@ -505,6 +526,217 @@ async function fetchQuestDetails(region, questId, accessToken) {
         return response.data;
     } catch (error) {
         return null; // Quest not found in static data
+    }
+}
+
+// WowHead quest scraping functions
+async function fetchWowHeadQuestsByZone(zoneName) {
+    try {
+        // WowHead has a search API that we can use
+        const searchUrl = `https://www.wowhead.com/quests?filter=22:1;6:${encodeURIComponent(zoneName)};0:0`;
+
+        console.log(`Scraping WowHead quests for zone: ${zoneName}`);
+
+        // This would need to be implemented with web scraping
+        // For now, let's return empty array and implement step by step
+        return [];
+    } catch (error) {
+        console.error(`Failed to scrape WowHead for zone ${zoneName}:`, error.message);
+        return [];
+    }
+}
+
+async function fetchWowHeadQuestData(questId) {
+    try {
+        // WowHead quest tooltip API (unofficial)
+        const response = await axios.get(`https://www.wowhead.com/tooltip/quest/${questId}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+        });
+
+        // Parse the tooltip response to extract quest data
+        // This needs to be implemented based on WowHead's response format
+        return null;
+    } catch (error) {
+        console.error(`Failed to get WowHead data for quest ${questId}:`, error.message);
+        return null;
+    }
+}
+
+// Known WoW zones for comprehensive quest scraping
+const WOW_ZONES = [
+    // Classic zones
+    'Elwynn Forest', 'Westfall', 'Redridge Mountains', 'Duskwood', 'Stranglethorn Vale',
+    'Dun Morogh', 'Loch Modan', 'Wetlands', 'Arathi Highlands', 'Badlands',
+    'Teldrassil', 'Darkshore', 'Ashenvale', 'Stonetalon Mountains', 'Desolace',
+    'Durotar', 'The Barrens', 'Stonetalon Mountains', 'Thousand Needles', 'Tanaris',
+
+    // Burning Crusade
+    'Hellfire Peninsula', 'Zangarmarsh', 'Nagrand', 'Blade\'s Edge Mountains', 'Netherstorm',
+    'Terokkar Forest', 'Shadowmoon Valley',
+
+    // Wrath of the Lich King
+    'Borean Tundra', 'Dragonblight', 'Grizzly Hills', 'Howling Fjord', 'Icecrown',
+    'Sholazar Basin', 'The Storm Peaks', 'Wintergrasp', 'Zul\'Drak',
+
+    // Cataclysm
+    'Mount Hyjal', 'Vashj\'ir', 'Deepholm', 'Uldum', 'Twilight Highlands',
+
+    // Mists of Pandaria
+    'The Jade Forest', 'Valley of the Four Winds', 'Krasarang Wilds', 'Kun-Lai Summit',
+    'Townlong Steppes', 'Dread Wastes', 'Vale of Eternal Blossoms',
+
+    // Warlords of Draenor
+    'Frostfire Ridge', 'Gorgrond', 'Talador', 'Spires of Arak', 'Nagrand (Draenor)',
+    'Shadowmoon Valley (Draenor)',
+
+    // Legion
+    'Azsuna', 'Val\'sharah', 'Highmountain', 'Stormheim', 'Suramar',
+
+    // Battle for Azeroth
+    'Tiragarde Sound', 'Drustvar', 'Stormsong Valley', 'Zuldazar', 'Nazmir', 'Vol\'dun',
+
+    // Shadowlands
+    'Bastion', 'Maldraxxus', 'Ardenweald', 'Revendreth', 'The Maw',
+
+    // Dragonflight
+    'The Waking Shores', 'Ohn\'ahran Plains', 'The Azure Span', 'Thaldraszus',
+
+    // The War Within
+    'Isle of Dorn', 'The Ringing Deeps', 'Hallowfall', 'Azj-Kahet'
+];
+
+// Track quest discovery progress to avoid re-scanning same IDs
+let questDiscoveryOffset = 0;
+
+// Background quest discovery service
+async function backgroundQuestDiscovery(region, accessToken, maxQuests = 2000) {
+    console.log('🔍 Starting background quest discovery...');
+
+    const questRanges = [
+        { start: 1, end: 15000, name: 'Classic', sample: 100 },
+        { start: 9000, end: 12000, name: 'Burning Crusade', sample: 60 },
+        { start: 11000, end: 14500, name: 'Wrath of the Lich King', sample: 70 },
+        { start: 14000, end: 29000, name: 'Cataclysm', sample: 150 },
+        { start: 28000, end: 35000, name: 'Mists of Pandaria', sample: 70 },
+        { start: 33000, end: 40000, name: 'Warlords of Draenor', sample: 70 },
+        { start: 38000, end: 48000, name: 'Legion', sample: 100 },
+        { start: 46000, end: 58000, name: 'Battle for Azeroth', sample: 120 },
+        { start: 57000, end: 66000, name: 'Shadowlands', sample: 90 },
+        { start: 65000, end: 85000, name: 'Dragonflight & War Within', sample: 200 }
+    ];
+
+    let totalProcessed = 0;
+    let totalFound = 0;
+
+    // Increment offset each run so we scan different quest IDs
+    questDiscoveryOffset = (questDiscoveryOffset + 1) % 50; // Cycles 0-49
+
+    try {
+        for (const range of questRanges) {
+            if (totalFound >= maxQuests) break;
+
+            console.log(`🔎 Discovering ${range.name} quests (offset: ${questDiscoveryOffset})...`);
+            let foundInRange = 0;
+            const stepSize = Math.ceil((range.end - range.start) / range.sample);
+
+            // Start with offset to scan different IDs each time
+            for (let questId = range.start + questDiscoveryOffset; questId < range.end && foundInRange < range.sample; questId += stepSize) {
+                try {
+                    // Check if we already have this quest
+                    const existingQuest = await database.getQuestFromMaster(questId);
+                    if (existingQuest) {
+                        continue; // Skip quests we already have
+                    }
+
+                    const questDetails = await fetchQuestDetails(region, questId, accessToken);
+
+                    if (questDetails) {
+                        const questData = {
+                            quest_id: questDetails.id,
+                            quest_name: questDetails.name || `Quest ${questDetails.id}`,
+                            area_id: questDetails.area?.id || null,
+                            area_name: questDetails.area?.name || null,
+                            category_id: questDetails.category?.id || null,
+                            category_name: questDetails.category?.name || null,
+                            type_id: questDetails.type?.id || null,
+                            type_name: questDetails.type?.name || null,
+                            expansion_name: range.name,
+                            is_seasonal: questDetails.id > 60000
+                        };
+
+                        await database.upsertQuestMaster(questData);
+                        foundInRange++;
+                        totalFound++;
+
+                        if (totalFound % 50 === 0) {
+                            console.log(`🎯 Background discovery: ${totalFound} quests found so far...`);
+                        }
+                    }
+
+                    totalProcessed++;
+
+                    // Gentle rate limiting for background operation
+                    await new Promise(resolve => setTimeout(resolve, 150));
+
+                } catch (questErr) {
+                    // Silently continue - many quest IDs won't exist
+                }
+
+                // Break if we've found enough from this range
+                if (totalFound >= maxQuests) break;
+            }
+
+            console.log(`✅ ${range.name}: Found ${foundInRange} new quests`);
+
+            // Longer pause between expansion ranges
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        console.log(`🎉 Background quest discovery complete! Found ${totalFound} new quests (processed ${totalProcessed} IDs)`);
+        console.log(`🔄 Next run will use offset ${(questDiscoveryOffset + 1) % 50} to discover different quest IDs`);
+
+    } catch (error) {
+        console.error('❌ Background quest discovery error:', error);
+    }
+}
+
+// Periodic quest discovery service (runs every 6 hours)
+let questDiscoveryInterval = null;
+
+async function startPeriodicQuestDiscovery() {
+    // Don't start if already running
+    if (questDiscoveryInterval) return;
+
+    console.log('🚀 Starting periodic quest discovery service...');
+
+    const runDiscovery = async () => {
+        try {
+            // Get a client credentials token for the discovery
+            const accessToken = await getClientCredentialsToken('us'); // Default to US region
+
+            // Run background discovery with smaller batches for periodic runs
+            await backgroundQuestDiscovery('us', accessToken, 500);
+
+            console.log('⏰ Next quest discovery in 6 hours...');
+        } catch (error) {
+            console.error('❌ Periodic quest discovery error:', error);
+        }
+    };
+
+    // Run immediately on startup (after a short delay)
+    setTimeout(runDiscovery, 30000); // 30 second delay after server start
+
+    // Then run every 6 hours
+    questDiscoveryInterval = setInterval(runDiscovery, 6 * 60 * 60 * 1000);
+}
+
+function stopPeriodicQuestDiscovery() {
+    if (questDiscoveryInterval) {
+        clearInterval(questDiscoveryInterval);
+        questDiscoveryInterval = null;
+        console.log('🛑 Stopped periodic quest discovery service');
     }
 }
 
@@ -1001,6 +1233,7 @@ app.post('/api/sync-quests', requireAuth, async (req, res) => {
         const characters = await database.getAllCharacters(userId);
         let charactersProcessed = 0;
         let totalQuests = 0;
+        let totalQuestsAddedToSharedDatabase = 0;
 
         for (const character of characters) {
             try {
@@ -1016,15 +1249,54 @@ app.post('/api/sync-quests', requireAuth, async (req, res) => {
                     req.session.accessToken
                 );
 
-                // Save quest data
+                // Save completed quest data for this user
                 for (const quest of completedQuests) {
                     await database.upsertCompletedQuest(userId, quest.id);
                 }
 
+                // ENHANCEMENT: Add these quests to the shared quest database
+                // This helps build a comprehensive quest database for ALL users
+                let questsAddedToDatabase = 0;
+                for (const quest of completedQuests) {
+                    try {
+                        // Check if we already have this quest in the master database
+                        const existingQuest = await database.getQuestFromMaster(quest.id);
+
+                        if (!existingQuest) {
+                            // Get quest details and add to shared database
+                            const questDetails = await fetchQuestDetails(userRegion, quest.id, accessToken);
+
+                            if (questDetails) {
+                                const questData = {
+                                    quest_id: questDetails.id,
+                                    quest_name: questDetails.name || `Quest ${questDetails.id}`,
+                                    area_id: questDetails.area?.id || null,
+                                    area_name: questDetails.area?.name || null,
+                                    category_id: questDetails.category?.id || null,
+                                    category_name: questDetails.category?.name || null,
+                                    type_id: questDetails.type?.id || null,
+                                    type_name: questDetails.type?.name || null,
+                                    expansion_name: determineExpansionFromQuest(questDetails) || null,
+                                    is_seasonal: questDetails.id > 60000
+                                };
+
+                                await database.upsertQuestMaster(questData);
+                                questsAddedToDatabase++;
+                            }
+
+                            // Small delay to respect rate limits
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                        }
+                    } catch (questErr) {
+                        // Silently continue - quest details might not be available
+                    }
+                }
+
                 charactersProcessed++;
                 totalQuests += completedQuests.length;
+                totalQuestsAddedToSharedDatabase += questsAddedToDatabase;
 
-                console.log(`Synced ${completedQuests.length} quests for ${character.name}`);
+                console.log(`Synced ${completedQuests.length} quests for ${character.name} (${questsAddedToDatabase} added to shared database)`);
 
             } catch (questErr) {
                 console.error(`Failed to sync quests for ${character.name}:`, questErr.message);
@@ -1036,9 +1308,12 @@ app.post('/api/sync-quests', requireAuth, async (req, res) => {
         await database.updateQuestSyncTime(userId);
 
         res.json({
-            message: 'Quest sync completed',
+            message: totalQuestsAddedToSharedDatabase > 0
+                ? `Quest sync completed! Added ${totalQuestsAddedToSharedDatabase} new quests to the shared database for all users.`
+                : 'Quest sync completed',
             charactersProcessed,
             totalQuests,
+            questsContributedToDatabase: totalQuestsAddedToSharedDatabase,
             lastSync: new Date()
         });
 
@@ -1183,46 +1458,74 @@ app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
         const userRegion = await getUserRegionForAPI(userId);
         const accessToken = await getClientCredentialsToken(userRegion);
 
-        console.log('Starting quest cache population...');
+        console.log('Starting intelligent quest cache population...');
 
-        // Step 1: Populate quest areas
-        const areas = await fetchQuestAreasIndex(userRegion, accessToken);
-        for (const area of areas) {
-            await database.upsertQuestArea(area.id, area.name);
+        // HYBRID APPROACH: Build quest database from multiple sources
+        // 1. Your completed quests (known to exist)
+        // 2. Quest ID range scanning (find more quests)
+        // 3. Cross-reference with Battle.net API for details
+
+        const characters = await database.getAllCharacters(userId);
+        if (characters.length === 0) {
+            return res.json({
+                message: 'No characters found. Please refresh character data first.',
+                results: { questsProcessed: 0, questsFailed: 0, totalQuests: 0 }
+            });
         }
-        console.log(`Cached ${areas.length} quest areas`);
-
-        // Step 2: Populate quest categories
-        const categories = await fetchQuestCategoriesIndex(userRegion, accessToken);
-        for (const category of categories) {
-            await database.upsertQuestCategory(category.id, category.name);
-        }
-        console.log(`Cached ${categories.length} quest categories`);
-
-        // Step 3: Populate quest types
-        const types = await fetchQuestTypesIndex(userRegion, accessToken);
-        for (const type of types) {
-            await database.upsertQuestType(type.id, type.name);
-        }
-        console.log(`Cached ${types.length} quest types`);
-
-        // Step 4: Get all quests from index
-        const questsIndex = await fetchQuestIndex(userRegion, accessToken);
-        console.log(`Found ${questsIndex.length} quests to process`);
 
         let processed = 0;
         let failed = 0;
+        let skipped = 0;
+        const seenQuests = new Set();
 
-        // Process quests in batches to avoid overwhelming the API
-        for (let i = 0; i < questsIndex.length; i += 50) {
-            const batch = questsIndex.slice(i, i + 50);
+        // Phase 1: Get all completed quests from your characters
+        for (const character of characters) {
+            try {
+                if (processed > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
 
-            for (const questRef of batch) {
-                try {
-                    const questDetails = await fetchQuestDetails(userRegion, questRef.id, accessToken);
+                const completedQuests = await fetchCharacterCompletedQuests(
+                    userRegion,
+                    character.realm_slug,
+                    character.name,
+                    req.session.accessToken
+                );
+
+                console.log(`${character.name}: Found ${completedQuests.length} completed quests`);
+
+                // Just record completed quests for now, get details later
+                for (const questRef of completedQuests) {
+                    if (!seenQuests.has(questRef.id)) {
+                        seenQuests.add(questRef.id);
+                        await database.upsertCompletedQuest(userId, questRef.id);
+                    }
+                }
+
+            } catch (charErr) {
+                console.error(`Failed to get quests for ${character.name}:`, charErr.message);
+            }
+        }
+
+        console.log(`Phase 2: Random quest discovery sampling...`);
+
+        // Trigger background quest discovery (non-blocking)
+        setImmediate(() => {
+            backgroundQuestDiscovery(userRegion, accessToken)
+                .catch(error => console.error('Background quest discovery error:', error));
+        });
+
+        // For immediate user feedback, do a quick sample of a few quests
+        const quickSampleCount = 20;
+        for (let i = 0; i < quickSampleCount; i++) {
+            try {
+                // Random quest ID sampling
+                const randomId = Math.floor(Math.random() * 80000) + 1;
+
+                if (!seenQuests.has(randomId)) {
+                    const questDetails = await fetchQuestDetails(userRegion, randomId, accessToken);
 
                     if (questDetails) {
-                        // Extract and structure quest data
                         const questData = {
                             quest_id: questDetails.id,
                             quest_name: questDetails.name || `Quest ${questDetails.id}`,
@@ -1232,42 +1535,37 @@ app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
                             category_name: questDetails.category?.name || null,
                             type_id: questDetails.type?.id || null,
                             type_name: questDetails.type?.name || null,
-                            expansion_name: determineExpansionFromQuest(questDetails) || null,
-                            is_seasonal: questDetails.id > 60000 // Heuristic for seasonal quests
+                            expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
+                            is_seasonal: questDetails.id > 60000
                         };
 
                         await database.upsertQuestMaster(questData);
                         processed++;
-                    } else {
-                        failed++;
                     }
 
-                    // Small delay to respect rate limits
-                    if (processed % 10 === 0) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                } catch (error) {
-                    failed++;
-                    console.error(`Failed to process quest ${questRef.id}:`, error.message);
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
+            } catch (questErr) {
+                failed++;
             }
-
-            console.log(`Processed batch ${i/50 + 1}/${Math.ceil(questsIndex.length/50)} - Success: ${processed}, Failed: ${failed}`);
-
-            // Longer pause between batches
-            await new Promise(resolve => setTimeout(resolve, 500));
         }
+
+        console.log(`Quick sampling complete. Background discovery running...`);
+
+        // Update quest sync time
+        await database.updateQuestSyncTime(userId);
 
         console.log('Quest cache population completed');
         res.json({
-            message: 'Quest cache populated successfully',
+            message: 'Quest cache populated successfully from character data',
             results: {
-                areas: areas.length,
-                categories: categories.length,
-                types: types.length,
+                areas: 0, // Quest Index APIs not available
+                categories: 0, // Quest Index APIs not available
+                types: 0, // Quest Index APIs not available
                 questsProcessed: processed,
                 questsFailed: failed,
-                totalQuests: questsIndex.length
+                totalQuests: processed + failed,
+                charactersProcessed: characters.length
             }
         });
 
@@ -1553,19 +1851,36 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const server = app.listen(PORT, () => {
-    console.log(`✨ WoW Character Manager (PostgreSQL) running on http://localhost:${PORT}`);
+const server = app.listen(PORT, async () => {
+    console.log(`✨ Warband Tracker (PostgreSQL) running on http://localhost:${PORT}`);
     console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`📁 Database: ${path.join(__dirname, 'data', 'wow_characters.db')}`);
-    
+
     if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32) {
         console.warn('⚠️  WARNING: SESSION_SECRET is not set or too short. Set a strong secret in production!');
+    }
+
+    // Initialize database and start background services
+    try {
+        await database.initDatabase();
+        console.log('🗃️  Database initialized successfully');
+
+        // Start periodic quest discovery service
+        await startPeriodicQuestDiscovery();
+        console.log('🔍 Background quest discovery service started');
+
+    } catch (error) {
+        console.error('❌ Initialization error:', error);
     }
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
+const gracefulShutdown = (signal) => {
+    console.log(`${signal} signal received: closing HTTP server`);
+
+    // Stop background services
+    stopPeriodicQuestDiscovery();
+
     server.close(async () => {
         console.log('HTTP server closed');
         try {
@@ -1576,6 +1891,9 @@ process.on('SIGTERM', () => {
         }
         process.exit(0);
     });
-});
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 module.exports = app;

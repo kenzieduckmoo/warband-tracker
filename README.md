@@ -1,4 +1,4 @@
-# WoW Character Manager
+# Warband Tracker
 
 A secure, multi-user web application for World of Warcraft players to manage characters, track professions, and organize character notes using Battle.net OAuth authentication.
 
@@ -149,8 +149,8 @@ curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Clone and setup
-git clone https://github.com/yourusername/wow-character-manager.git
-cd wow-character-manager
+git clone https://github.com/yourusername/warband-tracker.git
+cd warband-tracker
 npm install
 
 # Use PM2 for process management
@@ -163,7 +163,7 @@ pm2 startup
 ## Project Structure
 
 ```
-wow-character-manager/
+warband-tracker/
 ├── server.js              # Main application server
 ├── database-multiuser.js  # Database operations
 ├── public/               
