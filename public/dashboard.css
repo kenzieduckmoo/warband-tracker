@@ -30,10 +30,8 @@ body {
 
 .header-content {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 20px;
+    flex-direction: column;
+    gap: 15px;
 }
 
 .dashboard-header h1 {
@@ -44,10 +42,25 @@ body {
     background-clip: text;
 }
 
-.header-info {
+.header-title-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.header-user-info {
     display: flex;
     align-items: center;
     gap: 15px;
+}
+
+.header-controls {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
 }
 
 .user-tag {

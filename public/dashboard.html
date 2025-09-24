@@ -11,16 +11,20 @@
         <!-- Header -->
         <header class="dashboard-header">
             <div class="header-content">
-                <h1>Warband Tracker - Dashboard</h1>
-                <div class="header-info">
-                    <span id="user-tag" class="user-tag"></span>
-                    <div class="region-selector">
-                        <label for="region-select">Region:</label>
-                        <select id="region-select" class="region-select">
-                            <option value="us">NA/OCE</option>
-                            <option value="eu">EU</option>
-                        </select>
+                <div class="header-title-line">
+                    <h1>Warband Tracker - Dashboard</h1>
+                    <div class="header-user-info">
+                        <span id="user-tag" class="user-tag"></span>
+                        <div class="region-selector">
+                            <label for="region-select">Region:</label>
+                            <select id="region-select" class="region-select">
+                                <option value="us">NA/OCE</option>
+                                <option value="eu">EU</option>
+                            </select>
+                        </div>
                     </div>
+                </div>
+                <div class="header-controls">
                     <button id="refresh-btn" class="btn-refresh">🔄 Refresh Data</button>
                     <button id="sync-quests-btn" class="btn-sync-quests">🗡️ Sync Quests</button>
                     <button id="populate-quest-cache-btn" class="btn-populate-quest-cache">📚 Populate Quest Cache</button>
