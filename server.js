@@ -758,7 +758,7 @@ class QuestCacheJobQueue {
                 }
 
                 // Convert realm name to proper format
-                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
+                const realmSlug = character.realm.toLowerCase().replace(/\s+/g, '-').replace(/['']/g, '').replace(/[^a-z0-9-]/g, '');
 
                 const completedQuests = await this.fetchCharacterQuestsWithRetry(
                     userRegion,
@@ -1055,7 +1055,7 @@ async function startPeriodicQuestDiscovery() {
     setTimeout(runDiscovery, 30000); // 30 second delay after server start
 
     // Then run every 2 hours
-    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 234);
+    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 120);
 }
 
 function stopPeriodicQuestDiscovery() {
@@ -1288,7 +1288,7 @@ async function refreshUserCharacterData(userId, accessToken, userRegion) {
                     }
 
                     // Convert realm name to proper format for Battle.net API
-                    const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
+                    const realmSlug = character.realm.toLowerCase().replace(/\s+/g, '-').replace(/['']/g, '').replace(/[^a-z0-9-]/g, '');
 
                     const completedQuests = await fetchCharacterCompletedQuests(
                         userRegion,
@@ -1689,7 +1689,7 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
             try {
                 // Get character professions from API
                 const professionsResponse = await axios.get(
-                    `https://${userRegion}.api.blizzard.com/profile/wow/character/${character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '')}/${character.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
+                    `https://${userRegion}.api.blizzard.com/profile/wow/character/${character.realm.toLowerCase().replace(/\s+/g, '-').replace(/['']/g, '').replace(/[^a-z0-9-]/g, '')}/${character.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
                     {
                         headers: {
                             'Authorization': `Bearer ${req.session.accessToken}`

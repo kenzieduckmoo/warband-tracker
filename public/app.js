@@ -96,13 +96,6 @@ async function loadCharacters() {
                 console.log(`Found character from hash: ${hash}`, targetCharacter);
                 selectCharacter(targetCharacter);
 
-                // Scroll to the character in the sidebar
-                setTimeout(() => {
-                    const charElement = document.querySelector(`[data-char-id="${targetCharacter.id}"]`);
-                    if (charElement) {
-                        charElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }, 100);
 
                 // Clear the hash from URL after navigation
                 window.history.replaceState({}, document.title, '/characters');
