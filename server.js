@@ -617,6 +617,322 @@ const WOW_ZONES = [
 // Track quest discovery progress to avoid re-scanning same IDs
 let questDiscoveryOffset = 0;
 
+// Background Job Queue System
+class QuestCacheJobQueue {
+    constructor() {
+        this.jobs = new Map(); // jobId -> job data
+        this.queue = []; // Array of pending job IDs
+        this.isProcessing = false;
+        this.rateLimiter = new RateLimiter();
+    }
+
+    // Add a new job to the queue
+    addJob(userId, userRegion, accessToken, battlenetTag) {
+        const jobId = `quest-cache-${userId}-${Date.now()}`;
+        const job = {
+            id: jobId,
+            userId,
+            userRegion,
+            accessToken,
+            battlenetTag,
+            status: 'queued',
+            queuePosition: this.queue.length + 1,
+            startTime: null,
+            endTime: null,
+            progress: {
+                phase: 'queued',
+                charactersProcessed: 0,
+                totalCharacters: 0,
+                questsProcessed: 0,
+                questsContributed: 0,
+                errors: []
+            },
+            createdAt: new Date(),
+            error: null
+        };
+
+        this.jobs.set(jobId, job);
+        this.queue.push(jobId);
+
+        // Update queue positions for all jobs
+        this.updateQueuePositions();
+
+        console.log(`🔄 Added quest cache job ${jobId} for ${battlenetTag} (position ${job.queuePosition})`);
+
+        // Start processing if not already running
+        if (!this.isProcessing) {
+            this.processQueue();
+        }
+
+        return jobId;
+    }
+
+    // Update queue positions for all pending jobs
+    updateQueuePositions() {
+        this.queue.forEach((jobId, index) => {
+            const job = this.jobs.get(jobId);
+            if (job && job.status === 'queued') {
+                job.queuePosition = index + 1;
+            }
+        });
+    }
+
+    // Get job status
+    getJobStatus(jobId) {
+        return this.jobs.get(jobId) || null;
+    }
+
+    // Process the job queue
+    async processQueue() {
+        if (this.isProcessing || this.queue.length === 0) return;
+
+        this.isProcessing = true;
+        console.log(`🚀 Starting job queue processing. ${this.queue.length} jobs pending.`);
+
+        while (this.queue.length > 0) {
+            const jobId = this.queue.shift();
+            const job = this.jobs.get(jobId);
+
+            if (!job) continue;
+
+            try {
+                job.status = 'processing';
+                job.startTime = new Date();
+                job.progress.phase = 'starting';
+                this.updateQueuePositions();
+
+                console.log(`⚡ Processing job ${jobId} for ${job.battlenetTag}`);
+
+                await this.executeQuestCacheJob(job);
+
+                job.status = 'completed';
+                job.endTime = new Date();
+                job.progress.phase = 'completed';
+
+                console.log(`✅ Completed job ${jobId} for ${job.battlenetTag} in ${job.endTime - job.startTime}ms`);
+
+            } catch (error) {
+                job.status = 'failed';
+                job.endTime = new Date();
+                job.error = error.message;
+                job.progress.phase = 'failed';
+
+                console.error(`❌ Job ${jobId} failed:`, error.message);
+            }
+
+            // Small delay between jobs to prevent overwhelming the server
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        this.isProcessing = false;
+        console.log(`🏁 Job queue processing complete`);
+    }
+
+    // Execute a single quest cache job
+    async executeQuestCacheJob(job) {
+        const { userId, userRegion, accessToken } = job;
+
+        // Get user's characters
+        const characters = await database.getAllCharacters(userId);
+        job.progress.totalCharacters = characters.length;
+        job.progress.phase = 'fetching_characters';
+
+        if (characters.length === 0) {
+            throw new Error('No characters found. Please refresh character data first.');
+        }
+
+        let questsProcessed = 0;
+        let questsContributed = 0;
+        const seenQuests = new Set();
+
+        job.progress.phase = 'processing_characters';
+
+        // Process characters with optimized performance
+        for (let i = 0; i < characters.length; i++) {
+            const character = characters[i];
+
+            try {
+                // Smart rate limiting - adaptive delays
+                if (i > 0) {
+                    await this.rateLimiter.waitForSlot();
+                }
+
+                // Convert realm name to proper format
+                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
+
+                const completedQuests = await this.fetchCharacterQuestsWithRetry(
+                    userRegion,
+                    realmSlug,
+                    character.name,
+                    accessToken
+                );
+
+                console.log(`${character.name}: Found ${completedQuests.length} completed quests`);
+
+                // Process completed quests in batches for better performance
+                const batchSize = 10;
+                for (let j = 0; j < completedQuests.length; j += batchSize) {
+                    const batch = completedQuests.slice(j, j + batchSize);
+
+                    await Promise.all(batch.map(async (questRef) => {
+                        if (!seenQuests.has(questRef.id)) {
+                            seenQuests.add(questRef.id);
+                            await database.upsertCompletedQuest(userId, questRef.id);
+
+                            // Add to master database if not already there
+                            const existingQuest = await database.getQuestFromMaster(questRef.id);
+                            if (!existingQuest) {
+                                const questDetails = await this.fetchQuestDetailsWithRetry(userRegion, questRef.id, accessToken);
+                                if (questDetails) {
+                                    const questData = {
+                                        quest_id: questDetails.id,
+                                        quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
+                                        area_id: questDetails.area?.id || null,
+                                        area_name: extractEnglishText(questDetails.area?.name) || null,
+                                        category_id: questDetails.category?.id || null,
+                                        category_name: extractEnglishText(questDetails.category?.name) || null,
+                                        type_id: questDetails.type?.id || null,
+                                        type_name: extractEnglishText(questDetails.type?.name) || null,
+                                        expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
+                                        is_seasonal: questDetails.id > 60000
+                                    };
+                                    await database.upsertQuestMaster(questData);
+                                    questsContributed++;
+                                }
+                            }
+                            questsProcessed++;
+                        }
+                    }));
+
+                    // Update progress
+                    job.progress.questsProcessed = questsProcessed;
+                    job.progress.questsContributed = questsContributed;
+                }
+
+                job.progress.charactersProcessed = i + 1;
+
+            } catch (charErr) {
+                console.error(`Failed to process ${character.name}:`, charErr.message);
+                job.progress.errors.push(`${character.name}: ${charErr.message}`);
+            }
+        }
+
+        // Update quest zone summaries
+        job.progress.phase = 'updating_summaries';
+        try {
+            await database.updateZoneQuestSummary(userId);
+            await database.updateQuestSyncTime(userId);
+        } catch (summaryErr) {
+            console.error('Failed to update quest zone summaries:', summaryErr.message);
+            job.progress.errors.push(`Zone summary update: ${summaryErr.message}`);
+        }
+
+        // Trigger background quest discovery
+        job.progress.phase = 'triggering_discovery';
+        setImmediate(() => {
+            backgroundQuestDiscovery(userRegion, accessToken)
+                .catch(error => console.error('Background quest discovery error:', error));
+        });
+
+        job.progress.phase = 'completed';
+    }
+
+    // Fetch character quests with exponential backoff retry
+    async fetchCharacterQuestsWithRetry(region, realmSlug, characterName, accessToken, maxRetries = 3) {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                await this.rateLimiter.waitForSlot();
+                return await fetchCharacterCompletedQuests(region, realmSlug, characterName, accessToken);
+            } catch (error) {
+                if (error.response?.status === 429 && attempt < maxRetries - 1) {
+                    // Rate limited - exponential backoff
+                    const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                    console.log(`Rate limited, retrying ${characterName} in ${delay}ms (attempt ${attempt + 1})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    this.rateLimiter.recordError();
+                } else {
+                    throw error;
+                }
+            }
+        }
+        return [];
+    }
+
+    // Fetch quest details with retry logic
+    async fetchQuestDetailsWithRetry(region, questId, accessToken, maxRetries = 3) {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                await this.rateLimiter.waitForSlot();
+                return await fetchQuestDetails(region, questId, accessToken);
+            } catch (error) {
+                if (error.response?.status === 429 && attempt < maxRetries - 1) {
+                    const delay = Math.pow(2, attempt) * 500 + Math.random() * 500;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    this.rateLimiter.recordError();
+                } else {
+                    return null; // Quest not found is normal
+                }
+            }
+        }
+        return null;
+    }
+}
+
+// Smart rate limiter with adaptive throttling
+class RateLimiter {
+    constructor() {
+        this.requestsPerSecond = 50; // Start conservative, can adapt up
+        this.maxRequestsPerSecond = 80; // Leave some headroom under 100
+        this.minRequestsPerSecond = 10;
+        this.lastRequests = [];
+        this.consecutiveErrors = 0;
+    }
+
+    async waitForSlot() {
+        const now = Date.now();
+
+        // Remove requests older than 1 second
+        this.lastRequests = this.lastRequests.filter(time => now - time < 1000);
+
+        // If we're at the limit, wait
+        if (this.lastRequests.length >= this.requestsPerSecond) {
+            const oldestRequest = Math.min(...this.lastRequests);
+            const waitTime = 1000 - (now - oldestRequest) + 10; // Small buffer
+            if (waitTime > 0) {
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+        }
+
+        this.lastRequests.push(now);
+    }
+
+    recordError() {
+        this.consecutiveErrors++;
+        // Reduce rate limit on consecutive errors
+        if (this.consecutiveErrors >= 3) {
+            this.requestsPerSecond = Math.max(
+                this.minRequestsPerSecond,
+                Math.floor(this.requestsPerSecond * 0.5)
+            );
+            console.log(`⚠️  Reduced rate limit to ${this.requestsPerSecond}/sec due to errors`);
+        }
+    }
+
+    recordSuccess() {
+        if (this.consecutiveErrors > 0) {
+            this.consecutiveErrors = 0;
+            // Gradually increase rate limit after successful runs
+            this.requestsPerSecond = Math.min(
+                this.maxRequestsPerSecond,
+                Math.floor(this.requestsPerSecond * 1.1)
+            );
+        }
+    }
+}
+
+// Global job queue instance
+const questCacheJobQueue = new QuestCacheJobQueue();
+
 // Background quest discovery service
 async function backgroundQuestDiscovery(region, accessToken, maxQuests = 2000) {
     console.log('🔍 Starting background quest discovery...');
@@ -1476,170 +1792,79 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
     }
 });
 
-// Quest Master Cache population endpoint
+// Quest Master Cache population endpoint - now uses job queue
 app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
     try {
         const userId = req.session.userId;
         const userRegion = await getUserRegionForAPI(userId);
-        const accessToken = await getClientCredentialsToken(userRegion);
+        const battlenetTag = req.session.battlenetTag;
 
-        console.log('Starting intelligent quest cache population...');
+        // Add job to the queue
+        const jobId = questCacheJobQueue.addJob(
+            userId,
+            userRegion,
+            req.session.accessToken,
+            battlenetTag
+        );
 
-        // HYBRID APPROACH: Build quest database from multiple sources
-        // 1. Your completed quests (known to exist)
-        // 2. Quest ID range scanning (find more quests)
-        // 3. Cross-reference with Battle.net API for details
+        const job = questCacheJobQueue.getJobStatus(jobId);
 
-        const characters = await database.getAllCharacters(userId);
-        if (characters.length === 0) {
-            return res.json({
-                message: 'No characters found. Please refresh character data first.',
-                results: { questsProcessed: 0, questsFailed: 0, totalQuests: 0 }
-            });
-        }
-
-        let processed = 0;
-        let failed = 0;
-        let skipped = 0;
-        const seenQuests = new Set();
-
-        // Phase 1: Get all completed quests from your characters
-        for (const character of characters) {
-            try {
-                if (processed > 0) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-
-                // Convert realm name to proper format for Battle.net API
-                const realmSlug = character.realm.toLowerCase().replace(/[\s']/g, '').replace(/[^a-z0-9]/g, '');
-
-                const completedQuests = await fetchCharacterCompletedQuests(
-                    userRegion,
-                    realmSlug,
-                    character.name,
-                    req.session.accessToken
-                );
-
-                console.log(`${character.name}: Found ${completedQuests.length} completed quests`);
-
-                // Record completed quests AND add them to master database
-                for (const questRef of completedQuests) {
-                    if (!seenQuests.has(questRef.id)) {
-                        seenQuests.add(questRef.id);
-                        await database.upsertCompletedQuest(userId, questRef.id);
-
-                        // Also add to master quest database if not already there
-                        try {
-                            const existingQuest = await database.getQuestFromMaster(questRef.id);
-                            if (!existingQuest) {
-                                const questDetails = await fetchQuestDetails(userRegion, questRef.id, req.session.accessToken);
-                                if (questDetails) {
-                                    const questData = {
-                                        quest_id: questDetails.id,
-                                        quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
-                                        area_id: questDetails.area?.id || null,
-                                        area_name: extractEnglishText(questDetails.area?.name) || null,
-                                        category_id: questDetails.category?.id || null,
-                                        category_name: extractEnglishText(questDetails.category?.name) || null,
-                                        type_id: questDetails.type?.id || null,
-                                        type_name: extractEnglishText(questDetails.type?.name) || null,
-                                        expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
-                                        is_seasonal: questDetails.id > 60000
-                                    };
-                                    await database.upsertQuestMaster(questData);
-                                    processed++;
-                                }
-                                await new Promise(resolve => setTimeout(resolve, 100));
-                            }
-                        } catch (questErr) {
-                            failed++;
-                            console.error(`Failed to add quest ${questRef.id} to master database:`, questErr.message);
-                        }
-                    }
-                }
-
-            } catch (charErr) {
-                console.error(`Failed to get quests for ${character.name}:`, charErr.message);
-            }
-        }
-
-        console.log(`Phase 2: Random quest discovery sampling...`);
-
-        // Trigger background quest discovery (non-blocking)
-        setImmediate(() => {
-            backgroundQuestDiscovery(userRegion, accessToken)
-                .catch(error => console.error('Background quest discovery error:', error));
-        });
-
-        // For immediate user feedback, do a quick sample of a few quests
-        const quickSampleCount = 20;
-        for (let i = 0; i < quickSampleCount; i++) {
-            try {
-                // Random quest ID sampling
-                const randomId = Math.floor(Math.random() * 80000) + 1;
-
-                if (!seenQuests.has(randomId)) {
-                    const questDetails = await fetchQuestDetails(userRegion, randomId, accessToken);
-
-                    if (questDetails) {
-                        const questData = {
-                            quest_id: questDetails.id,
-                            quest_name: extractEnglishText(questDetails.name) || `Quest ${questDetails.id}`,
-                            area_id: questDetails.area?.id || null,
-                            area_name: extractEnglishText(questDetails.area?.name) || null,
-                            category_id: questDetails.category?.id || null,
-                            category_name: extractEnglishText(questDetails.category?.name) || null,
-                            type_id: questDetails.type?.id || null,
-                            type_name: extractEnglishText(questDetails.type?.name) || null,
-                            expansion_name: determineExpansionFromQuest(questDetails) || 'Unknown',
-                            is_seasonal: questDetails.id > 60000
-                        };
-
-                        await database.upsertQuestMaster(questData);
-                        processed++;
-                    }
-
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-            } catch (questErr) {
-                failed++;
-            }
-        }
-
-        console.log(`Quick sampling complete. Background discovery running...`);
-
-        // Update quest zone summaries after adding new quests
-        try {
-            await database.updateZoneQuestSummary(userId);
-            console.log('Updated quest zone summaries after cache population');
-        } catch (summaryErr) {
-            console.error('Failed to update quest zone summaries:', summaryErr.message);
-        }
-
-        // Update quest sync time
-        await database.updateQuestSyncTime(userId);
-
-        console.log('Quest cache population completed');
         res.json({
-            message: 'Quest cache populated successfully from character data',
-            results: {
-                areas: 0, // Quest Index APIs not available
-                categories: 0, // Quest Index APIs not available
-                types: 0, // Quest Index APIs not available
-                questsProcessed: processed,
-                questsFailed: failed,
-                totalQuests: processed + failed,
-                charactersProcessed: characters.length
-            }
+            message: 'Quest cache population job queued successfully',
+            jobId: jobId,
+            queuePosition: job.queuePosition,
+            estimatedWaitTime: `${job.queuePosition * 2-3} minutes`,
+            statusUrl: `/api/quest-cache-status/${jobId}`
         });
 
     } catch (error) {
         console.error('Quest cache population error:', error);
         res.status(500).json({
-            error: 'Failed to populate quest cache',
+            error: 'Failed to queue quest cache population',
             details: error.message
         });
     }
+});
+
+// Get quest cache job status
+app.get('/api/quest-cache-status/:jobId', requireAuth, (req, res) => {
+    const { jobId } = req.params;
+    const job = questCacheJobQueue.getJobStatus(jobId);
+
+    if (!job) {
+        return res.status(404).json({ error: 'Job not found' });
+    }
+
+    // Only allow users to check their own jobs
+    if (job.userId !== req.session.userId) {
+        return res.status(403).json({ error: 'Access denied' });
+    }
+
+    res.json({
+        id: job.id,
+        status: job.status,
+        queuePosition: job.queuePosition,
+        progress: job.progress,
+        startTime: job.startTime,
+        endTime: job.endTime,
+        error: job.error,
+        estimatedTimeRemaining: job.status === 'queued' ? `${job.queuePosition * 2-3} minutes` : null
+    });
+});
+
+// Get current queue status (for admin/monitoring)
+app.get('/api/quest-cache-queue-status', requireAuth, (req, res) => {
+    const queueInfo = {
+        totalJobs: questCacheJobQueue.jobs.size,
+        pendingJobs: questCacheJobQueue.queue.length,
+        isProcessing: questCacheJobQueue.isProcessing,
+        rateLimitStatus: {
+            currentRPS: questCacheJobQueue.rateLimiter.requestsPerSecond,
+            consecutiveErrors: questCacheJobQueue.rateLimiter.consecutiveErrors
+        }
+    };
+
+    res.json(queueInfo);
 });
 
 // Get incomplete quests by zone - for dashboard display

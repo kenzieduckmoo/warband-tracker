@@ -132,13 +132,14 @@ async function updateRecipeCache() {
 }
 
 
-// Populate quest master cache from Blizzard API
+// Populate quest master cache from Blizzard API - now with job queue
 async function populateQuestCache() {
     const populateBtn = document.getElementById('populate-quest-cache-btn');
-    populateBtn.innerHTML = '<span class="loading-spinner"></span> Populating Quest Cache...';
+    populateBtn.innerHTML = '<span class="loading-spinner"></span> Queuing Quest Cache Job...';
     populateBtn.disabled = true;
 
     try {
+        // Start the job
         const response = await fetch('/api/populate-quest-cache', {
             method: 'POST',
             headers: {
@@ -148,25 +149,151 @@ async function populateQuestCache() {
 
         if (response.ok) {
             const result = await response.json();
-            console.log('Quest cache populate result:', result);
+            console.log('Quest cache job queued:', result);
 
+            // Show queue position and start progress tracking
             showSuccessMessage(
-                `Quest cache populated successfully! ` +
-                `Processed ${result.results.questsProcessed}/${result.results.totalQuests} quests, ` +
-                `${result.results.areas} areas, ${result.results.categories} categories, ${result.results.types} types.`
+                `Quest cache job queued successfully! Position in queue: ${result.queuePosition}. ` +
+                `Estimated wait time: ${result.estimatedWaitTime}`
             );
 
-            // Reload dashboard data to show updated zone tracking
-            await loadDashboardData();
+            // Start polling for job status
+            await pollJobStatus(result.jobId, populateBtn);
+
         } else {
-            throw new Error('Failed to populate quest cache');
+            throw new Error('Failed to queue quest cache job');
         }
     } catch (error) {
         console.error('Failed to populate quest cache:', error);
-        showError('Failed to populate quest cache. This is a large operation and may take several minutes.');
-    } finally {
+        showError('Failed to queue quest cache job. Please try again.');
         populateBtn.innerHTML = '📚 Populate Quest Cache';
         populateBtn.disabled = false;
+    }
+}
+
+// Poll job status and update UI
+async function pollJobStatus(jobId, button) {
+    let pollCount = 0;
+    const maxPolls = 300; // 5 minutes max polling (1 poll per second)
+
+    const poll = async () => {
+        try {
+            const response = await fetch(`/api/quest-cache-status/${jobId}`);
+            if (!response.ok) {
+                throw new Error('Failed to get job status');
+            }
+
+            const job = await response.json();
+            console.log('Job status update:', job);
+
+            // Update button text based on job status
+            updateJobProgress(job, button);
+
+            // Check if job is complete
+            if (job.status === 'completed') {
+                showSuccessMessage(
+                    `Quest cache populated successfully! ` +
+                    `Processed ${job.progress.charactersProcessed}/${job.progress.totalCharacters} characters, ` +
+                    `${job.progress.questsProcessed} quests discovered, ` +
+                    `${job.progress.questsContributed} contributed to shared database.`
+                );
+
+                // Reload dashboard data to show updated zone tracking
+                await loadDashboardData();
+
+                button.innerHTML = '📚 Populate Quest Cache';
+                button.disabled = false;
+                return;
+
+            } else if (job.status === 'failed') {
+                showError(`Quest cache job failed: ${job.error}`);
+                button.innerHTML = '📚 Populate Quest Cache';
+                button.disabled = false;
+                return;
+
+            } else if (pollCount >= maxPolls) {
+                showError('Job status polling timed out. Job may still be running in background.');
+                button.innerHTML = '📚 Populate Quest Cache';
+                button.disabled = false;
+                return;
+            }
+
+            // Continue polling
+            pollCount++;
+            setTimeout(poll, 1000); // Poll every second
+
+        } catch (error) {
+            console.error('Error polling job status:', error);
+            showError('Lost connection to job status. Job may still be running in background.');
+            button.innerHTML = '📚 Populate Quest Cache';
+            button.disabled = false;
+        }
+    };
+
+    // Start polling
+    setTimeout(poll, 1000); // First poll after 1 second
+}
+
+// Update job progress display
+function updateJobProgress(job, button) {
+    let progressText = '';
+    let progressPercent = 0;
+
+    switch (job.status) {
+        case 'queued':
+            progressText = `Queued (Position: ${job.queuePosition})`;
+            progressPercent = 0;
+            break;
+
+        case 'processing':
+            switch (job.progress.phase) {
+                case 'starting':
+                    progressText = 'Starting...';
+                    progressPercent = 5;
+                    break;
+                case 'fetching_characters':
+                    progressText = 'Loading characters...';
+                    progressPercent = 10;
+                    break;
+                case 'processing_characters':
+                    const charPercent = job.progress.totalCharacters > 0 ?
+                        Math.round((job.progress.charactersProcessed / job.progress.totalCharacters) * 70) : 0;
+                    progressText = `Processing characters (${job.progress.charactersProcessed}/${job.progress.totalCharacters})`;
+                    progressPercent = 15 + charPercent;
+                    break;
+                case 'updating_summaries':
+                    progressText = 'Updating zone summaries...';
+                    progressPercent = 90;
+                    break;
+                case 'triggering_discovery':
+                    progressText = 'Starting background discovery...';
+                    progressPercent = 95;
+                    break;
+            }
+            break;
+
+        case 'completed':
+            progressText = 'Completed!';
+            progressPercent = 100;
+            break;
+
+        case 'failed':
+            progressText = 'Failed';
+            progressPercent = 0;
+            break;
+    }
+
+    // Update button with progress
+    button.innerHTML = `
+        <span class="loading-spinner"></span>
+        ${progressText}
+        ${progressPercent > 0 ? `(${progressPercent}%)` : ''}
+    `;
+
+    // Show additional details if available
+    if (job.progress.questsProcessed > 0) {
+        const details = `${job.progress.questsProcessed} quests, ${job.progress.questsContributed} contributed`;
+        button.title = details;
     }
 }
 
