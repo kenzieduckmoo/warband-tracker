@@ -1064,7 +1064,7 @@ async function startPeriodicQuestDiscovery() {
     setTimeout(runDiscovery, 30000); // 30 second delay after server start
 
     // Then run every 2 hours
-    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 120);
+    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 85);
 }
 
 function stopPeriodicQuestDiscovery() {
@@ -1128,7 +1128,7 @@ app.get('/auth/login', (req, res) => {
 });
 
 // Reusable function to refresh character data for a user
-async function refreshUserCharacterData(userId, accessToken, userRegion) {
+async function refreshUserCharacterData(userId, accessToken, userRegion, forceQuestSync = false) {
     const profileResponse = await axios.get(
         `https://${userRegion}.api.blizzard.com/profile/user/wow?namespace=profile-${userRegion}`,
         {
@@ -1283,8 +1283,10 @@ async function refreshUserCharacterData(userId, accessToken, userRegion) {
         const lastQuestSync = await database.getLastQuestSyncTime(userId);
         const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
 
-        if (!lastQuestSync || lastQuestSync <= sixHoursAgo) {
-            console.log('Syncing quest completion data...');
+        if (forceQuestSync || !lastQuestSync || lastQuestSync <= sixHoursAgo) {
+            const reason = forceQuestSync ? 'manual refresh requested' :
+                          !lastQuestSync ? 'no previous sync' : 'data is over 6 hours old';
+            console.log(`Syncing quest completion data (${reason})...`);
             let charactersProcessed = 0;
             let totalQuests = 0;
             let totalQuestsAddedToSharedDatabase = 0;
@@ -1461,7 +1463,7 @@ app.get('/auth/callback', async (req, res) => {
                     setTimeout(async () => {
                         try {
                             const userRegion = await getUserRegionForAPI(user.id);
-                            await refreshUserCharacterData(user.id, accessToken, userRegion);
+                            await refreshUserCharacterData(user.id, accessToken, userRegion, false);
                             console.log(`Auto-refresh completed for ${user.battlenet_tag}`);
                         } catch (refreshError) {
                             console.error(`Auto-refresh failed for ${user.battlenet_tag}:`, refreshError.message);
@@ -1530,7 +1532,7 @@ app.get('/api/characters', requireAuth, async (req, res) => {
         const userId = req.session.userId;
         const userRegion = await getUserRegionForAPI(userId);
 
-        const result = await refreshUserCharacterData(userId, req.session.accessToken, userRegion);
+        const result = await refreshUserCharacterData(userId, req.session.accessToken, userRegion, true);
 
         // Sort by item level
         result.characters.sort((a, b) => (b.averageItemLevel || 0) - (a.averageItemLevel || 0));
@@ -1805,11 +1807,13 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
 // Quest Master Cache population endpoint - now uses job queue
 app.post('/api/populate-quest-cache', requireAuth, async (req, res) => {
     try {
+        console.log(`🔴 Manual quest cache requested by user ${req.session.userId} (${req.session.battlenetTag})`);
+
         const userId = req.session.userId;
         const userRegion = await getUserRegionForAPI(userId);
         const battlenetTag = req.session.battlenetTag;
 
-        // Add job to the queue
+        // Add job to the queue (no time restrictions for manual requests)
         const jobId = questCacheJobQueue.addJob(
             userId,
             userRegion,
@@ -2067,6 +2071,17 @@ app.get('/api/recipe-cache-status', async (req, res) => {
     } catch (error) {
         console.error('Recipe cache status error:', error);
         res.status(500).json({ error: 'Failed to get cache status' });
+    }
+});
+
+// Recalculate zone summaries manually
+app.post('/api/recalculate-zone-summaries', requireAuth, async (req, res) => {
+    try {
+        await database.updateZoneQuestSummary(req.session.userId);
+        res.json({ success: true, message: 'Zone summaries recalculated successfully' });
+    } catch (error) {
+        console.error('Failed to recalculate zone summaries:', error);
+        res.status(500).json({ error: 'Failed to recalculate zone summaries' });
     }
 });
 
