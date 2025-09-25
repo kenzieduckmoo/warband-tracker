@@ -1086,13 +1086,28 @@ const dbHelpers = {
             // Clear existing summary for this user
             await client.query('DELETE FROM zone_quest_summary WHERE user_id = $1', [userId]);
 
-            // Calculate new summary - group by zone only, use the most common expansion name
+            // Calculate new summary - group by zone only, use primary expansion based on quest count
             await client.query(`
                 INSERT INTO zone_quest_summary (user_id, zone_name, expansion_name, total_quests, completed_quests, completion_percentage)
+                WITH zone_expansion_counts AS (
+                    SELECT
+                        zone_name,
+                        expansion_name,
+                        COUNT(*) as quest_count,
+                        ROW_NUMBER() OVER (PARTITION BY zone_name ORDER BY COUNT(*) DESC) as rn
+                    FROM cached_quests
+                    WHERE is_seasonal = FALSE
+                    GROUP BY zone_name, expansion_name
+                ),
+                primary_expansions AS (
+                    SELECT zone_name, expansion_name
+                    FROM zone_expansion_counts
+                    WHERE rn = 1
+                )
                 SELECT
                     $1 as user_id,
                     cq.zone_name,
-                    MODE() WITHIN GROUP (ORDER BY cq.expansion_name) as expansion_name,
+                    pe.expansion_name,
                     COUNT(cq.quest_id)::integer as total_quests,
                     COUNT(wcq.quest_id)::integer as completed_quests,
                     ROUND(
@@ -1104,8 +1119,9 @@ const dbHelpers = {
                     ) as completion_percentage
                 FROM cached_quests cq
                 LEFT JOIN warband_completed_quests wcq ON cq.quest_id = wcq.quest_id AND wcq.user_id = $1
+                JOIN primary_expansions pe ON cq.zone_name = pe.zone_name
                 WHERE cq.is_seasonal = FALSE
-                GROUP BY cq.zone_name
+                GROUP BY cq.zone_name, pe.expansion_name
             `, [userId]);
 
             await client.query('COMMIT');
