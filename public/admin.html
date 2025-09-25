@@ -4,8 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - Warband Tracker</title>
-    <link rel="stylesheet" href="style.css">
     <style>
+        /* CSS Variables */
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #1e2328;
+            --card-bg: #2a2f36;
+            --text-primary: #ffffff;
+            --text-secondary: #c1c7cd;
+            --accent-color: #f0b90b;
+            --accent-hover: #fdd835;
+            --border-color: #3c4043;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+            --warning-color: #ff9800;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
         .admin-container {
             max-width: 1200px;
             margin: 20px auto;
@@ -215,12 +237,12 @@
                 <div class="control-card">
                     <div class="control-title">View Current Version Info</div>
                     <div class="control-description">Check current version and unreleased changes</div>
-                    <button class="admin-button" onclick="viewVersionInfo()">View Version Info</button>
+                    <button class="admin-button" id="view-version-btn">View Version Info</button>
                 </div>
                 <div class="control-card">
                     <div class="control-title">Create New Version</div>
                     <div class="control-description">Release current unreleased changes as new version</div>
-                    <button class="admin-button success" onclick="showCreateVersionForm()">Create Version</button>
+                    <button class="admin-button success" id="create-version-btn">Create Version</button>
                 </div>
             </div>
             <div id="version-form" style="display: none;">
@@ -241,8 +263,8 @@
                         <option value="performance">Performance (⚡)</option>
                     </select>
                 </div>
-                <button class="admin-button success" onclick="createVersion()">Create Version & Generate Discord Post</button>
-                <button class="admin-button" onclick="hideCreateVersionForm()">Cancel</button>
+                <button class="admin-button success" id="submit-version-btn">Create Version & Generate Discord Post</button>
+                <button class="admin-button" id="cancel-version-btn">Cancel</button>
             </div>
         </div>
 
@@ -253,17 +275,17 @@
                 <div class="control-card">
                     <div class="control-title">Recalculate Zone Summaries</div>
                     <div class="control-description">Fix duplicate zones and recalculate completion data</div>
-                    <button class="admin-button" onclick="recalculateZoneSummaries()">Recalculate</button>
+                    <button class="admin-button" id="recalc-zones-btn">Recalculate</button>
                 </div>
                 <div class="control-card">
                     <div class="control-title">Debug Zone Data</div>
                     <div class="control-description">View raw zone data from database</div>
-                    <button class="admin-button" onclick="debugZoneData()">View Zone Debug</button>
+                    <button class="admin-button" id="debug-zones-btn">View Zone Debug</button>
                 </div>
                 <div class="control-card">
                     <div class="control-title">Debug Zone Summary</div>
                     <div class="control-description">View zone summary table data</div>
-                    <button class="admin-button" onclick="debugZoneSummary()">View Summary Debug</button>
+                    <button class="admin-button" id="debug-summary-btn">View Summary Debug</button>
                 </div>
             </div>
         </div>
@@ -275,12 +297,12 @@
                 <div class="control-card">
                     <div class="control-title">Cache Recipes</div>
                     <div class="control-description">Update recipe database from Battle.net API</div>
-                    <button class="admin-button" onclick="cacheRecipes()">Cache Recipes</button>
+                    <button class="admin-button" id="cache-recipes-btn">Cache Recipes</button>
                 </div>
                 <div class="control-card">
                     <div class="control-title">Quest Discovery Status</div>
                     <div class="control-description">Check background quest discovery service</div>
-                    <button class="admin-button" onclick="checkQuestDiscovery()">Check Status</button>
+                    <button class="admin-button" id="quest-discovery-btn">Check Status</button>
                 </div>
             </div>
         </div>
@@ -292,12 +314,12 @@
                 <div class="control-card">
                     <div class="control-title">View Logs</div>
                     <div class="control-description">Check recent server activity</div>
-                    <button class="admin-button" onclick="viewLogs()">View Logs</button>
+                    <button class="admin-button" id="view-logs-btn">View Logs</button>
                 </div>
                 <div class="control-card">
                     <div class="control-title">API Status</div>
                     <div class="control-description">Check system health and API connectivity</div>
-                    <button class="admin-button" onclick="checkApiStatus()">Check Status</button>
+                    <button class="admin-button" id="api-status-btn">Check Status</button>
                 </div>
             </div>
         </div>

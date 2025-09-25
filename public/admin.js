@@ -19,14 +19,21 @@ function showMessage(message, type = 'info') {
 function showCodeBlock(title, content, copyable = true) {
     const resultsArea = document.getElementById('results-area');
     const container = document.createElement('div');
+    const codeId = 'code-' + Date.now();
     container.innerHTML = `
         <h4 style="color: var(--text-primary); margin: 20px 0 10px 0;">${title}</h4>
         <div class="code-container">
-            <div class="code-block" id="code-${Date.now()}">${content}</div>
-            ${copyable ? `<button class="copy-button" onclick="copyToClipboard('code-${Date.now()}')">Copy</button>` : ''}
+            <div class="code-block" id="${codeId}">${content}</div>
+            ${copyable ? `<button class="copy-button" data-copy-target="${codeId}">Copy</button>` : ''}
         </div>
     `;
     resultsArea.appendChild(container);
+
+    // Add event listener for copy button
+    if (copyable) {
+        const copyBtn = container.querySelector('.copy-button');
+        copyBtn.addEventListener('click', () => copyToClipboard(codeId));
+    }
 }
 
 function copyToClipboard(elementId) {
@@ -213,5 +220,21 @@ async function checkApiStatus() {
 
 // Initialize admin panel
 document.addEventListener('DOMContentLoaded', () => {
+    // Add event listeners for all buttons
+    document.getElementById('view-version-btn')?.addEventListener('click', viewVersionInfo);
+    document.getElementById('create-version-btn')?.addEventListener('click', showCreateVersionForm);
+    document.getElementById('submit-version-btn')?.addEventListener('click', createVersion);
+    document.getElementById('cancel-version-btn')?.addEventListener('click', hideCreateVersionForm);
+
+    document.getElementById('recalc-zones-btn')?.addEventListener('click', recalculateZoneSummaries);
+    document.getElementById('debug-zones-btn')?.addEventListener('click', debugZoneData);
+    document.getElementById('debug-summary-btn')?.addEventListener('click', debugZoneSummary);
+
+    document.getElementById('cache-recipes-btn')?.addEventListener('click', cacheRecipes);
+    document.getElementById('quest-discovery-btn')?.addEventListener('click', checkQuestDiscovery);
+
+    document.getElementById('view-logs-btn')?.addEventListener('click', viewLogs);
+    document.getElementById('api-status-btn')?.addEventListener('click', checkApiStatus);
+
     showMessage('Admin panel loaded successfully', 'success');
 });
