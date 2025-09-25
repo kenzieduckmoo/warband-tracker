@@ -1,10 +1,20 @@
 // Common footer for all pages
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    // Load current version from API
+    let versionText = '0.3.2';
+    try {
+        const response = await fetch('/api/changelog');
+        const data = await response.json();
+        versionText = data.currentVersion;
+    } catch (error) {
+        console.warn('Failed to load version info:', error);
+    }
+
     const footer = document.createElement('footer');
     footer.innerHTML = `
         <div class="footer-content">
             <p>Created by <a href="https://linktr.ee/brandiraine" target="_blank" rel="noopener noreferrer">Kenzie DuckMoo</a></p>
-            <p>Powered by Battle.net API | Version 0.3.2</p>
+            <p>Powered by Battle.net API | <a href="/changelog" id="version-link">Version ${versionText}</a></p>
         </div>
     `;
     footer.style.cssText = `
@@ -27,9 +37,9 @@ document.addEventListener('DOMContentLoaded', function() {
         p.style.cssText = 'margin: 5px 0; font-size: 14px;';
     });
 
-    // Style the link
-    const link = footerContent.querySelector('a');
-    if (link) {
+    // Style the links
+    const links = footerContent.querySelectorAll('a');
+    links.forEach(link => {
         link.style.cssText = `
             color: #00aeff;
             text-decoration: none;
@@ -43,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
         link.addEventListener('mouseleave', () => {
             link.style.color = '#00aeff';
         });
-    }
+    });
 
     document.body.appendChild(footer);
 });

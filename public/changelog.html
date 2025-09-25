@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Changelog - Warband Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .changelog-container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .changelog-header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .changelog-header h1 {
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .version-card {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .version-card.unreleased {
+            border-left-color: #ffa500;
+            background: rgba(255, 165, 0, 0.1);
+        }
+
+        .version-card.feature {
+            border-left-color: #28a745;
+        }
+
+        .version-card.fix {
+            border-left-color: #dc3545;
+        }
+
+        .version-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .version-number {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        .version-date {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        .version-title {
+            color: var(--text-secondary);
+            font-style: italic;
+            margin: 5px 0;
+        }
+
+        .change-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .change-item {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-primary);
+        }
+
+        .change-item:last-child {
+            border-bottom: none;
+        }
+
+        .change-item:before {
+            content: "•";
+            color: var(--accent-color);
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--accent-color);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--accent-hover);
+        }
+
+        .unreleased-badge {
+            background: #ffa500;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="changelog-container">
+        <a href="/" class="back-link">← Back to Dashboard</a>
+
+        <div class="changelog-header">
+            <h1>Warband Tracker Changelog</h1>
+            <p>Track the latest updates and improvements to your WoW character manager</p>
+        </div>
+
+        <div id="changelog-content">
+            <!-- Content will be loaded dynamically -->
+        </div>
+    </div>
+
+    <script src="changelog.js"></script>
+</body>
+</html>

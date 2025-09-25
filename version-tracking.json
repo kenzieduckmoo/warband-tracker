@@ -1,0 +1,38 @@
+{
+  "currentVersion": "0.3.2",
+  "currentVersionDate": "2025-09-25",
+  "unreleased": [
+    "Fixed duplicate zones in Quest Zone Completion display",
+    "Fixed manual Refresh Data button bypassing 6-hour quest sync restriction",
+    "Added debug endpoints for database zone data investigation",
+    "Improved zone summary calculation to properly merge zones across expansions",
+    "Added comprehensive Admin Control Panel with API endpoint management",
+    "Added version tracking system with changelog page and Discord integration"
+  ],
+  "releases": {
+    "0.3.2": {
+      "date": "2025-09-25",
+      "title": "Database Consistency Fixes",
+      "changes": [
+        "Fixed character ID consistency across all systems",
+        "Resolved foreign key constraint violations for profession data",
+        "Fixed profession tracking for realms with spaces (Moon Guard, Aerie Peak, etc.)",
+        "Added unified realm slug conversion logic",
+        "Improved system reliability and data synchronization"
+      ],
+      "type": "fix"
+    },
+    "0.3.1": {
+      "date": "2025-09-24",
+      "title": "Auto-refresh and Navigation Improvements",
+      "changes": [
+        "Auto-refresh on login for 12+ hour old data",
+        "Wowhead zone links replace expansion dropdown",
+        "Quest discovery every 2h (was 6h)",
+        "Fixed dashboard character navigation",
+        "Fixed quest completion percentages"
+      ],
+      "type": "feature"
+    }
+  }
+}

@@ -18,6 +18,28 @@ if (!fs.existsSync(dataDir)) {
 
 const database = require('./database-postgresql');
 
+// Helper function to generate Discord-friendly markdown
+function generateDiscordMarkdown(version, release) {
+    const typeEmojis = {
+        feature: '🎉',
+        fix: '🛠️',
+        security: '🔒',
+        performance: '⚡'
+    };
+
+    const emoji = typeEmojis[release.type] || '📝';
+
+    let markdown = `${emoji} **Warband Tracker v${version}** - ${release.title}\n\n`;
+
+    release.changes.forEach(change => {
+        markdown += `• ${change}\n`;
+    });
+
+    markdown += `\n🔗 View full changelog: <https://warband-tracker.onrender.com/changelog>`;
+
+    return markdown;
+}
+
 // Helper function to generate consistent character IDs
 function generateCharacterId(realmName, characterName) {
     const realmSlug = realmName.toLowerCase()
@@ -75,6 +97,8 @@ app.use('/app.js', express.static(path.join(__dirname, 'public', 'app.js')));
 app.use('/dashboard.css', express.static(path.join(__dirname, 'public', 'dashboard.css')));
 app.use('/dashboard.js', express.static(path.join(__dirname, 'public', 'dashboard.js')));
 app.use('/footer.js', express.static(path.join(__dirname, 'public', 'footer.js')));
+app.use('/changelog.js', express.static(path.join(__dirname, 'public', 'changelog.js')));
+app.use('/admin.js', express.static(path.join(__dirname, 'public', 'admin.js')));
 
 // Session configuration with PostgreSQL store
  app.use(session({
@@ -1064,7 +1088,7 @@ async function startPeriodicQuestDiscovery() {
     setTimeout(runDiscovery, 30000); // 30 second delay after server start
 
     // Then run every 2 hours
-    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 85);
+    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 45);
 }
 
 function stopPeriodicQuestDiscovery() {
@@ -1094,6 +1118,16 @@ function requireAuthRedirect(req, res, next) {
 // Serve different pages based on auth status
 app.get('/', requireAuthRedirect, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// Changelog page route
+app.get('/changelog', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'changelog.html'));
+});
+
+// Admin panel route
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 app.get('/characters', requireAuthRedirect, (req, res) => {
@@ -2131,6 +2165,58 @@ app.get('/api/debug/zone-summary-table', requireAuth, async (req, res) => {
     } catch (error) {
         console.error('Failed to get zone summary debug data:', error);
         res.status(500).json({ error: 'Failed to get zone summary debug data' });
+    }
+});
+
+// Changelog API endpoints
+app.get('/api/changelog', (req, res) => {
+    try {
+        const versionData = require('./version-tracking.json');
+        res.json(versionData);
+    } catch (error) {
+        console.error('Failed to load version tracking:', error);
+        res.status(500).json({ error: 'Failed to load changelog' });
+    }
+});
+
+// Create new version (moves unreleased to released)
+app.post('/api/create-version', async (req, res) => {
+    try {
+        const { version, title, type = 'feature' } = req.body;
+        if (!version || !title) {
+            return res.status(400).json({ error: 'Version and title are required' });
+        }
+
+        const versionData = require('./version-tracking.json');
+
+        // Move unreleased items to new version
+        versionData.releases[version] = {
+            date: new Date().toISOString().split('T')[0],
+            title: title,
+            changes: [...(versionData.unreleased || [])],
+            type: type
+        };
+
+        // Update current version and clear unreleased
+        versionData.currentVersion = version;
+        versionData.currentVersionDate = new Date().toISOString().split('T')[0];
+        versionData.unreleased = [];
+
+        // Save updated version data
+        fs.writeFileSync('./version-tracking.json', JSON.stringify(versionData, null, 2));
+
+        // Generate Discord-friendly markdown
+        const discordMarkdown = generateDiscordMarkdown(version, versionData.releases[version]);
+
+        res.json({
+            success: true,
+            version,
+            discordMarkdown,
+            changelog: versionData
+        });
+    } catch (error) {
+        console.error('Failed to create version:', error);
+        res.status(500).json({ error: 'Failed to create version' });
     }
 });
 
