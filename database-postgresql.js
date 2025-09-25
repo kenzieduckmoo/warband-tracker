@@ -1086,13 +1086,13 @@ const dbHelpers = {
             // Clear existing summary for this user
             await client.query('DELETE FROM zone_quest_summary WHERE user_id = $1', [userId]);
 
-            // Calculate new summary
+            // Calculate new summary - group by zone only, use the most common expansion name
             await client.query(`
                 INSERT INTO zone_quest_summary (user_id, zone_name, expansion_name, total_quests, completed_quests, completion_percentage)
                 SELECT
                     $1 as user_id,
                     cq.zone_name,
-                    cq.expansion_name,
+                    MODE() WITHIN GROUP (ORDER BY cq.expansion_name) as expansion_name,
                     COUNT(cq.quest_id)::integer as total_quests,
                     COUNT(wcq.quest_id)::integer as completed_quests,
                     ROUND(
@@ -1105,7 +1105,7 @@ const dbHelpers = {
                 FROM cached_quests cq
                 LEFT JOIN warband_completed_quests wcq ON cq.quest_id = wcq.quest_id AND wcq.user_id = $1
                 WHERE cq.is_seasonal = FALSE
-                GROUP BY cq.zone_name, cq.expansion_name
+                GROUP BY cq.zone_name
             `, [userId]);
 
             await client.query('COMMIT');
