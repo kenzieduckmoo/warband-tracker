@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     footer.innerHTML = `
         <div class="footer-content">
             <p>Created by <a href="https://linktr.ee/brandiraine" target="_blank" rel="noopener noreferrer">Kenzie DuckMoo</a></p>
-            <p>Powered by Battle.net API | Version 0.3.1</p>
+            <p>Powered by Battle.net API | Version 0.3.2</p>
         </div>
     `;
     footer.style.cssText = `

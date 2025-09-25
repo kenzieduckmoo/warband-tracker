@@ -18,6 +18,15 @@ if (!fs.existsSync(dataDir)) {
 
 const database = require('./database-postgresql');
 
+// Helper function to generate consistent character IDs
+function generateCharacterId(realmName, characterName) {
+    const realmSlug = realmName.toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/['']/g, '')
+        .replace(/[^a-z0-9-]/g, '');
+    return `${realmSlug}-${characterName.toLowerCase()}`;
+}
+
 const app = express();
 app.set('trust proxy', 1); // ADD THIS LINE - trust first proxy
 const PORT = process.env.PORT || 3000;
@@ -1197,7 +1206,7 @@ async function refreshUserCharacterData(userId, accessToken, userRegion) {
                                 for (const tier of tiers) {
                                     await database.upsertProfessionTier(
                                         userId,
-                                        `${char.realm.slug}-${char.name.toLowerCase()}`,
+                                        generateCharacterId(extractEnglishText(char.realm), char.name),
                                         professionName,
                                         professionId,
                                         tier
@@ -1209,7 +1218,7 @@ async function refreshUserCharacterData(userId, accessToken, userRegion) {
                                         const knownRecipeIds = originalTier.known_recipes.map(recipe => recipe.id);
                                         await database.upsertKnownRecipes(
                                             userId,
-                                            `${char.realm.slug}-${char.name.toLowerCase()}`,
+                                            generateCharacterId(extractEnglishText(char.realm), char.name),
                                             professionId,
                                             tier.id,
                                             knownRecipeIds
@@ -1230,7 +1239,7 @@ async function refreshUserCharacterData(userId, accessToken, userRegion) {
                     }
 
                     const characterData = {
-                        id: `${char.realm.slug}-${char.name.toLowerCase()}`,
+                        id: generateCharacterId(extractEnglishText(char.realm), char.name),
                         name: char.name,
                         realm: extractEnglishText(charDetails.data.realm),
                         level: charDetails.data.level,
@@ -1688,8 +1697,9 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
         for (const character of characters) {
             try {
                 // Get character professions from API
+                const realmSlug = character.realm.toLowerCase().replace(/\s+/g, '-').replace(/['']/g, '').replace(/[^a-z0-9-]/g, '');
                 const professionsResponse = await axios.get(
-                    `https://${userRegion}.api.blizzard.com/profile/wow/character/${character.realm.toLowerCase().replace(/\s+/g, '-').replace(/['']/g, '').replace(/[^a-z0-9-]/g, '')}/${character.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
+                    `https://${userRegion}.api.blizzard.com/profile/wow/character/${realmSlug}/${character.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
                     {
                         headers: {
                             'Authorization': `Bearer ${req.session.accessToken}`
@@ -1751,7 +1761,7 @@ app.post('/api/update-recipe-cache', requireAuth, async (req, res) => {
                                         if (knownRecipeIds.length > 0) {
                                             await database.upsertKnownRecipes(
                                                 req.session.userId,
-                                                character.id,
+                                                generateCharacterId(character.realm, character.name),
                                                 professionId,
                                                 tierId,
                                                 knownRecipeIds
