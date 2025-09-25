@@ -1271,18 +1271,29 @@ const dbHelpers = {
         const client = await pool.connect();
         try {
             const result = await client.query(`
+                WITH zone_primary_expansion AS (
+                    SELECT
+                        area_name,
+                        area_id,
+                        expansion_name,
+                        ROW_NUMBER() OVER (PARTITION BY area_name ORDER BY COUNT(*) DESC) as rn
+                    FROM quest_master_cache
+                    WHERE area_name IS NOT NULL AND area_name != ''
+                    GROUP BY area_name, area_id, expansion_name
+                )
                 SELECT
                     q.area_name as zone_name,
-                    q.area_id,
-                    q.expansion_name,
+                    zpe.area_id,
+                    zpe.expansion_name,
                     COUNT(q.quest_id) as total_quests,
                     COUNT(wq.quest_id) as completed_quests,
                     COUNT(q.quest_id) - COUNT(wq.quest_id) as incomplete_quests,
                     ROUND((COUNT(wq.quest_id)::decimal / COUNT(q.quest_id)) * 100, 2) as completion_percentage
                 FROM quest_master_cache q
                 LEFT JOIN warband_completed_quests wq ON q.quest_id = wq.quest_id AND wq.user_id = $1
+                JOIN zone_primary_expansion zpe ON q.area_name = zpe.area_name AND zpe.rn = 1
                 WHERE q.area_name IS NOT NULL AND q.area_name != ''
-                GROUP BY q.area_name, q.area_id, q.expansion_name
+                GROUP BY q.area_name, zpe.area_id, zpe.expansion_name
                 HAVING COUNT(q.quest_id) - COUNT(wq.quest_id) > 0
                 ORDER BY incomplete_quests DESC, q.area_name
             `, [userId]);
