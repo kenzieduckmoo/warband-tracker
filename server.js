@@ -2085,6 +2085,55 @@ app.post('/api/recalculate-zone-summaries', requireAuth, async (req, res) => {
     }
 });
 
+// Debug endpoint to check raw zone data in cached_quests
+app.get('/api/debug/zone-data', requireAuth, async (req, res) => {
+    try {
+        const client = await database.pool.connect();
+        try {
+            // Get all unique zone/expansion combinations with quest counts
+            const result = await client.query(`
+                SELECT
+                    zone_name,
+                    expansion_name,
+                    COUNT(*) as quest_count
+                FROM cached_quests
+                WHERE zone_name ILIKE '%zuldazar%' OR zone_name ILIKE '%nazjatar%'
+                GROUP BY zone_name, expansion_name
+                ORDER BY zone_name, expansion_name
+            `);
+
+            res.json(result.rows);
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Failed to get zone debug data:', error);
+        res.status(500).json({ error: 'Failed to get zone debug data' });
+    }
+});
+
+// Debug endpoint to check current zone_quest_summary table
+app.get('/api/debug/zone-summary-table', requireAuth, async (req, res) => {
+    try {
+        const client = await database.pool.connect();
+        try {
+            const result = await client.query(`
+                SELECT * FROM zone_quest_summary
+                WHERE user_id = $1
+                AND (zone_name ILIKE '%zuldazar%' OR zone_name ILIKE '%nazjatar%')
+                ORDER BY zone_name, expansion_name
+            `, [req.session.userId]);
+
+            res.json(result.rows);
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Failed to get zone summary debug data:', error);
+        res.status(500).json({ error: 'Failed to get zone summary debug data' });
+    }
+});
+
 // Quest zone summary endpoint
 app.get('/api/quest-zones-summary', requireAuth, async (req, res) => {
     try {
