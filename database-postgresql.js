@@ -1,6 +1,9 @@
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 
+// Initialization lock to prevent concurrent database initialization
+let initializationLock = false;
+
 // Create connection pool
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -92,6 +95,14 @@ function getTierOrder(tierName) {
 
 // Initialize database schema with multi-user support
 async function initDatabase() {
+    // Prevent concurrent initialization
+    if (initializationLock) {
+        console.log('⏳ Database initialization already in progress, skipping...');
+        return;
+    }
+
+    initializationLock = true;
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -420,6 +431,7 @@ async function initDatabase() {
         throw error;
     } finally {
         client.release();
+        initializationLock = false; // Reset lock when done
     }
 }
 
