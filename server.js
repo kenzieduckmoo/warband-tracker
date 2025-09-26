@@ -2475,6 +2475,14 @@ app.get('/api/auction-price/:itemId', requireAuth, async (req, res) => {
     try {
         const { itemId } = req.params;
         const userId = req.session.userId;
+
+        // Validate itemId
+        if (!itemId || itemId === 'undefined' || isNaN(parseInt(itemId))) {
+            console.error(`Invalid itemId received: "${itemId}"`);
+            return res.status(400).json({ error: 'Invalid item ID provided' });
+        }
+
+        const itemIdInt = parseInt(itemId);
         const userRegion = await getUserRegionForAPI(userId);
 
         // Get user's main realm (or first character's realm)
@@ -2498,12 +2506,12 @@ app.get('/api/auction-price/:itemId', requireAuth, async (req, res) => {
         }
 
         // Get current auction price
-        const priceData = await database.getCurrentAuctionPrice(itemId, connectedRealmId);
+        const priceData = await database.getCurrentAuctionPrice(itemIdInt, connectedRealmId);
 
         if (priceData) {
             res.json({
                 success: true,
-                item_id: itemId,
+                item_id: itemIdInt,
                 price: priceData.lowest_price,
                 quantity: priceData.total_quantity,
                 is_commodity: priceData.connected_realm_id === 0,
@@ -2513,7 +2521,7 @@ app.get('/api/auction-price/:itemId', requireAuth, async (req, res) => {
         } else {
             res.json({
                 success: false,
-                item_id: itemId,
+                item_id: itemIdInt,
                 error: 'No auction data found'
             });
         }

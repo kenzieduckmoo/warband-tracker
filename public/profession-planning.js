@@ -285,19 +285,25 @@ function displayMissingRecipes(missingRecipes) {
     let html = '<div class="recipe-grid">';
 
     missingRecipes.forEach(recipe => {
+        const recipeId = recipe.recipe_id || 'invalid';
+        const recipeName = recipe.recipe_name || 'Unknown Recipe';
+        const tierName = recipe.tier_name || 'Unknown Tier';
+
         html += `
-            <div class="recipe-item" data-recipe-id="${recipe.recipe_id}">
+            <div class="recipe-item" data-recipe-id="${recipeId}">
                 <div class="recipe-header">
-                    <div class="recipe-name">${recipe.recipe_name}</div>
-                    <div class="recipe-price" id="price-${recipe.recipe_id}">Checking prices...</div>
+                    <div class="recipe-name">${recipeName}</div>
+                    <div class="recipe-price" id="price-${recipeId}">
+                        ${recipeId === 'invalid' ? 'Invalid recipe data' : 'Checking prices...'}
+                    </div>
                 </div>
                 <div class="recipe-details">
                     <span class="auction-type">📋 Missing Recipe</span>
-                    <span class="tier-info">${recipe.tier_name}</span>
+                    <span class="tier-info">${tierName}</span>
                 </div>
                 <div class="recipe-actions">
-                    <button class="btn btn-small view-wowhead" data-recipe-id="${recipe.recipe_id}">View on Wowhead</button>
-                    <button class="btn btn-small compare-prices" data-recipe-id="${recipe.recipe_id}">Compare Prices</button>
+                    <button class="btn btn-small view-wowhead" data-recipe-id="${recipeId}" ${recipeId === 'invalid' ? 'disabled' : ''}>View on Wowhead</button>
+                    <button class="btn btn-small compare-prices" data-recipe-id="${recipeId}" ${recipeId === 'invalid' ? 'disabled' : ''}>Compare Prices</button>
                 </div>
             </div>
         `;
@@ -310,14 +316,18 @@ function displayMissingRecipes(missingRecipes) {
     recipeList.querySelectorAll('.view-wowhead').forEach(btn => {
         btn.addEventListener('click', function() {
             const recipeId = this.dataset.recipeId;
-            window.open(`https://www.wowhead.com/item=${recipeId}`, '_blank');
+            if (recipeId && recipeId !== 'invalid' && !this.disabled) {
+                window.open(`https://www.wowhead.com/item=${recipeId}`, '_blank');
+            }
         });
     });
 
     recipeList.querySelectorAll('.compare-prices').forEach(btn => {
         btn.addEventListener('click', function() {
             const recipeId = this.dataset.recipeId;
-            showCrossServerComparison(recipeId);
+            if (recipeId && recipeId !== 'invalid' && !this.disabled) {
+                showCrossServerComparison(recipeId);
+            }
         });
     });
 }
@@ -326,12 +336,26 @@ function displayMissingRecipes(missingRecipes) {
 async function loadAuctionHousePrices(missingRecipes) {
     if (missingRecipes.length === 0) return;
 
+    console.log('Loading auction prices for recipes:', missingRecipes);
+
     let totalCost = 0;
     let pricesFound = 0;
 
     // Load prices for each recipe
     for (const recipe of missingRecipes) {
+        // Validate recipe has a valid ID
+        if (!recipe.recipe_id || recipe.recipe_id === 'undefined') {
+            console.warn('Skipping recipe with invalid ID:', recipe);
+            const priceElement = document.getElementById(`price-${recipe.recipe_id || 'invalid'}`);
+            if (priceElement) {
+                priceElement.textContent = 'Invalid recipe ID';
+                priceElement.className = 'recipe-price no-price';
+            }
+            continue;
+        }
+
         try {
+            console.log(`Fetching price for recipe ID: ${recipe.recipe_id}`);
             const response = await fetch(`/api/auction-price/${recipe.recipe_id}`);
             const priceData = await response.json();
 
