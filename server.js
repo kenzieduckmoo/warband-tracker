@@ -355,6 +355,53 @@ async function updateAuctionHouseData(connectedRealmId, region = 'us') {
     }
 }
 
+// Regional Commodities Auction House Data Collection
+async function updateRegionalCommodities(region = 'us') {
+    try {
+        console.log(`📦 Fetching regional commodities data for ${region.toUpperCase()}...`);
+
+        const token = await getClientCredentialsToken(region);
+        const startTime = Date.now();
+
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/auctions/commodities?namespace=dynamic-${region}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                timeout: 45000 // 45 second timeout
+            }
+        );
+
+        const fetchTime = Date.now() - startTime;
+        console.log(`⏱️ Commodities API fetch completed in ${fetchTime}ms for ${region.toUpperCase()}`);
+
+        if (response.data && response.data.auctions) {
+            // Use a special connected_realm_id of 0 for commodities (region-wide)
+            const result = await database.upsertAuctionData(0, response.data.auctions, region);
+            console.log(`✅ Updated commodities data for ${region.toUpperCase()}: ${result.itemsProcessed} items, ${result.auctionsProcessed} auctions`);
+            return result;
+        } else {
+            console.log(`⚠️ No commodities data returned for ${region.toUpperCase()}`);
+            return null;
+        }
+    } catch (error) {
+        if (error.code === 'ECONNABORTED') {
+            console.error(`⏱️ Timeout: Commodities API took longer than 45 seconds for ${region}`);
+            throw new Error(`Commodities API timeout (45s) for ${region}`);
+        } else if (error.response?.status === 503) {
+            console.error(`🚫 Service unavailable: Commodities API is down for ${region}`);
+            throw new Error(`Commodities API unavailable for ${region}`);
+        } else if (error.response?.status === 429) {
+            console.error(`⏸️ Rate limited: Too many requests to commodities API for ${region}`);
+            throw new Error(`Rate limited by commodities API for ${region}`);
+        } else {
+            console.error(`❌ Failed to update commodities data for ${region}:`, error.message);
+            throw error;
+        }
+    }
+}
+
 // Get connected realm ID for a character's realm
 async function getConnectedRealmId(realmSlug, region = 'us') {
     try {
@@ -2606,10 +2653,34 @@ app.post('/api/admin/update-auction-house', async (req, res) => {
         // Get all unique realms from our user database
         const client = await database.pool.connect();
         let realmsUpdated = 0;
+        let commoditiesUpdated = 0;
         const updateDetails = [];
 
         try {
-            // Get all unique realms with their user regions
+            // First, update regional commodities for both US and EU
+            const regions = ['us', 'eu'];
+            for (const region of regions) {
+                try {
+                    console.log(`📦 Updating ${region.toUpperCase()} regional commodities...`);
+                    await updateRegionalCommodities(region);
+                    commoditiesUpdated++;
+                    updateDetails.push({
+                        type: 'commodities',
+                        region: region.toUpperCase(),
+                        status: 'success'
+                    });
+                } catch (error) {
+                    console.error(`❌ Failed to update ${region.toUpperCase()} commodities:`, error.message);
+                    updateDetails.push({
+                        type: 'commodities',
+                        region: region.toUpperCase(),
+                        status: 'failed',
+                        error: error.message
+                    });
+                }
+            }
+
+            // Then update connected realm auction houses
             const realmsResult = await client.query(`
                 SELECT DISTINCT c.realm, u.region
                 FROM characters c
@@ -2660,9 +2731,10 @@ app.post('/api/admin/update-auction-house', async (req, res) => {
         res.json({
             success: true,
             realmsUpdated,
-            totalRealms: updateDetails.length,
+            commoditiesUpdated,
+            totalUpdates: updateDetails.length,
             details: updateDetails,
-            message: `Updated auction data for ${realmsUpdated} realms`
+            message: `Updated auction data: ${commoditiesUpdated} commodity regions, ${realmsUpdated} connected realms`
         });
     } catch (error) {
         console.error('❌ Failed to update auction house data:', error);
@@ -2813,101 +2885,6 @@ app.post('/api/admin/run-migrations', async (req, res) => {
     } catch (error) {
         console.error('❌ Failed to run migrations:', error);
         res.status(500).json({ error: 'Failed to run migrations: ' + error.message });
-    }
-});
-
-// Price History and Analytics API Endpoints
-
-// Get price history for an item
-app.get('/api/price-history/:connectedRealmId/:itemId/:region', requireAuth, async (req, res) => {
-    try {
-        const { connectedRealmId, itemId, region } = req.params;
-        const days = parseInt(req.query.days) || 30;
-
-        const history = await database.getPriceHistory(
-            parseInt(connectedRealmId),
-            parseInt(itemId),
-            region,
-            days
-        );
-
-        res.json({
-            success: true,
-            connectedRealmId: parseInt(connectedRealmId),
-            itemId: parseInt(itemId),
-            region,
-            days,
-            history
-        });
-    } catch (error) {
-        console.error('❌ Failed to get price history:', error);
-        res.status(500).json({ error: 'Failed to get price history: ' + error.message });
-    }
-});
-
-// Get price trends for an item
-app.get('/api/price-trends/:connectedRealmId/:itemId/:region', requireAuth, async (req, res) => {
-    try {
-        const { connectedRealmId, itemId, region } = req.params;
-
-        const trends = await database.getPriceTrends(
-            parseInt(connectedRealmId),
-            parseInt(itemId),
-            region
-        );
-
-        res.json({
-            success: true,
-            connectedRealmId: parseInt(connectedRealmId),
-            itemId: parseInt(itemId),
-            region,
-            trends
-        });
-    } catch (error) {
-        console.error('❌ Failed to get price trends:', error);
-        res.status(500).json({ error: 'Failed to get price trends: ' + error.message });
-    }
-});
-
-// Calculate price trends for an item (admin/manual trigger)
-app.post('/api/admin/calculate-price-trends/:connectedRealmId/:itemId/:region', async (req, res) => {
-    try {
-        const { connectedRealmId, itemId, region } = req.params;
-
-        const trendResults = await database.calculatePriceTrends(
-            parseInt(connectedRealmId),
-            parseInt(itemId),
-            region
-        );
-
-        res.json({
-            success: true,
-            connectedRealmId: parseInt(connectedRealmId),
-            itemId: parseInt(itemId),
-            region,
-            trends: trendResults,
-            message: `Calculated trends for ${trendResults.length} time periods`
-        });
-    } catch (error) {
-        console.error('❌ Failed to calculate price trends:', error);
-        res.status(500).json({ error: 'Failed to calculate price trends: ' + error.message });
-    }
-});
-
-// Aggregate daily price history (admin endpoint for background processing)
-app.post('/api/admin/aggregate-price-history', async (req, res) => {
-    try {
-        console.log('📊 Manual price history aggregation triggered');
-        const result = await database.aggregateDailyPriceHistory();
-
-        res.json({
-            success: true,
-            recordsProcessed: result.recordsProcessed,
-            message: `Aggregated ${result.recordsProcessed} daily price history records`
-        });
-    } catch (error) {
-        console.error('❌ Failed to aggregate price history:', error);
-        res.status(500).json({ error: 'Failed to aggregate price history: ' + error.message });
     }
 });
 

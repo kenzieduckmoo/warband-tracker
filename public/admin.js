@@ -421,23 +421,6 @@ async function viewProfessionMains() {
     }
 }
 
-async function aggregatePriceHistory() {
-    clearResults();
-    try {
-        showMessage('Aggregating price history data... This may take a moment.', 'info');
-        const response = await fetch('/api/admin/aggregate-price-history', { method: 'POST' });
-        const data = await response.json();
-
-        if (data.success) {
-            showMessage(`Price history aggregation completed! Processed ${data.recordsProcessed} records.`, 'success');
-            showCodeBlock('Aggregation Results', JSON.stringify(data, null, 2));
-        } else {
-            showMessage('Failed to aggregate price history: ' + data.error, 'error');
-        }
-    } catch (error) {
-        showMessage('Failed to aggregate price history: ' + error.message, 'error');
-    }
-}
 
 async function updateConnectedRealmsUS() {
     clearResults();
@@ -534,7 +517,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('auction-status-btn')?.addEventListener('click', checkAuctionStatus);
     document.getElementById('cleanup-auctions-btn')?.addEventListener('click', cleanupAuctionData);
     document.getElementById('profession-mains-btn')?.addEventListener('click', viewProfessionMains);
-    document.getElementById('aggregate-price-history-btn')?.addEventListener('click', aggregatePriceHistory);
     document.getElementById('update-connected-realms-us-btn')?.addEventListener('click', updateConnectedRealmsUS);
     document.getElementById('update-connected-realms-eu-btn')?.addEventListener('click', updateConnectedRealmsEU);
 

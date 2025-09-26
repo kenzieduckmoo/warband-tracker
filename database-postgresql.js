@@ -426,53 +426,8 @@ async function initDatabase() {
             console.log('⚠️ Error creating price_alerts table:', error.message);
         }
 
-        // Create price history aggregation table
-        try {
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS price_history (
-                    id SERIAL PRIMARY KEY,
-                    connected_realm_id INTEGER NOT NULL,
-                    item_id INTEGER NOT NULL,
-                    region TEXT NOT NULL,
-                    date DATE NOT NULL,
-                    min_price BIGINT NOT NULL,
-                    max_price BIGINT NOT NULL,
-                    avg_price BIGINT NOT NULL,
-                    median_price BIGINT,
-                    total_quantity INTEGER NOT NULL,
-                    auction_count INTEGER NOT NULL,
-                    volatility DECIMAL(10,4),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(connected_realm_id, item_id, region, date)
-                )
-            `);
-            console.log('✅ price_history table created/verified');
-        } catch (error) {
-            console.log('⚠️ Error creating price_history table:', error.message);
-        }
-
-        // Create price trends table for calculated analytics
-        try {
-            await client.query(`
-                CREATE TABLE IF NOT EXISTS price_trends (
-                    id SERIAL PRIMARY KEY,
-                    connected_realm_id INTEGER NOT NULL,
-                    item_id INTEGER NOT NULL,
-                    region TEXT NOT NULL,
-                    trend_period VARCHAR(20) NOT NULL, -- '7d', '30d', '90d'
-                    avg_price BIGINT NOT NULL,
-                    price_change_percent DECIMAL(10,4),
-                    trend_direction VARCHAR(10), -- 'up', 'down', 'stable'
-                    volatility_score DECIMAL(10,4),
-                    data_points INTEGER NOT NULL,
-                    last_calculated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(connected_realm_id, item_id, region, trend_period)
-                )
-            `);
-            console.log('✅ price_trends table created/verified');
-        } catch (error) {
-            console.log('⚠️ Error creating price_trends table:', error.message);
-        }
+        // Price history and trends tables removed for simplicity
+        // Focus on real-time auction data only
 
         // Create connected realms mapping table
         try {
@@ -1583,18 +1538,27 @@ const dbHelpers = {
     upsertAuctionData: async function(connectedRealmId, auctionData, region = 'us') {
         const client = await pool.connect();
         try {
+            console.log(`🗄️ Starting database upsert for realm ${connectedRealmId}: ${auctionData.length} auctions`);
             await client.query('BEGIN');
 
             // Clear old auction data for this realm
-            await client.query(
-                'DELETE FROM current_auctions WHERE connected_realm_id = $1',
-                [connectedRealmId]
+            console.log(`🧹 Clearing old auction data for realm ${connectedRealmId}...`);
+            const deleteResult = await client.query(
+                'DELETE FROM current_auctions WHERE connected_realm_id = $1 AND region = $2',
+                [connectedRealmId, region]
             );
+            console.log(`✅ Deleted ${deleteResult.rowCount} old auction records`);
 
             // Process auction data and insert current auctions
+            console.log(`📊 Processing ${auctionData.length} auction records...`);
             const itemPrices = new Map();
+            let processedCount = 0;
 
             for (const auction of auctionData) {
+                processedCount++;
+                if (processedCount % 10000 === 0) {
+                    console.log(`📈 Processed ${processedCount}/${auctionData.length} auctions...`);
+                }
                 const itemId = auction.item.id;
                 const price = auction.buyout || auction.bid || 0;
                 const quantity = auction.quantity || 1;
@@ -1614,15 +1578,19 @@ const dbHelpers = {
                 itemData.totalQuantity += quantity;
                 itemData.auctionCount += 1;
 
-                // Insert into price history
-                await client.query(`
-                    INSERT INTO auction_prices (connected_realm_id, item_id, price, quantity, time_left, region)
-                    VALUES ($1, $2, $3, $4, $5, $6)
-                `, [connectedRealmId, itemId, price, quantity, auction.time_left, region]);
+                // Skip individual price history inserts for performance
+                // We'll aggregate this data later with the daily aggregation function
             }
+
+            console.log(`💾 Inserting ${itemPrices.size} current auction summaries...`);
+            let insertedCount = 0;
 
             // Insert current auction summaries
             for (const [itemId, data] of itemPrices) {
+                insertedCount++;
+                if (insertedCount % 1000 === 0) {
+                    console.log(`📝 Inserted ${insertedCount}/${itemPrices.size} auction summaries...`);
+                }
                 const lowestPrice = Math.min(...data.prices);
                 const avgPrice = Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length);
 
@@ -1633,7 +1601,9 @@ const dbHelpers = {
                 `, [connectedRealmId, itemId, lowestPrice, avgPrice, data.totalQuantity, data.auctionCount, region]);
             }
 
+            console.log(`✅ Committing transaction for realm ${connectedRealmId}...`);
             await client.query('COMMIT');
+            console.log(`🎉 Successfully processed realm ${connectedRealmId}: ${itemPrices.size} items, ${auctionData.length} auctions`);
             return { itemsProcessed: itemPrices.size, auctionsProcessed: auctionData.length };
         } catch (error) {
             await client.query('ROLLBACK');
@@ -1643,16 +1613,29 @@ const dbHelpers = {
         }
     },
 
-    getCurrentAuctionPrices: async function(connectedRealmId, itemIds) {
+    getCurrentAuctionPrices: async function(connectedRealmId, itemIds, region) {
         const client = await pool.connect();
         try {
+            // Get prices from both realm-specific auctions and regional commodities
             const result = await client.query(`
-                SELECT item_id, lowest_price, avg_price, total_quantity, auction_count, last_updated
+                SELECT item_id, lowest_price, avg_price, total_quantity, auction_count, last_updated,
+                       CASE WHEN connected_realm_id = 0 THEN 'commodity' ELSE 'realm' END as auction_type
                 FROM current_auctions
-                WHERE connected_realm_id = $1 AND item_id = ANY($2)
-            `, [connectedRealmId, itemIds]);
+                WHERE (connected_realm_id = $1 OR connected_realm_id = 0)
+                AND region = $2
+                AND item_id = ANY($3)
+                ORDER BY connected_realm_id DESC -- Prefer realm-specific over commodities if both exist
+            `, [connectedRealmId, region, itemIds]);
 
-            return result.rows;
+            // Remove duplicates, preferring realm-specific prices over commodities
+            const uniquePrices = new Map();
+            result.rows.forEach(row => {
+                if (!uniquePrices.has(row.item_id)) {
+                    uniquePrices.set(row.item_id, row);
+                }
+            });
+
+            return Array.from(uniquePrices.values());
         } finally {
             client.release();
         }
@@ -1733,186 +1716,6 @@ const dbHelpers = {
             `, [userId, itemId, targetPrice, connectedRealmId]);
 
             return result.rows[0].id;
-        } finally {
-            client.release();
-        }
-    },
-
-    // Price History and Analytics Functions
-    aggregateDailyPriceHistory: async function() {
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-
-            // Aggregate auction_prices data into daily price_history records
-            const result = await client.query(`
-                INSERT INTO price_history (
-                    connected_realm_id, item_id, region, date,
-                    min_price, max_price, avg_price, median_price,
-                    total_quantity, auction_count, volatility
-                )
-                SELECT
-                    connected_realm_id,
-                    item_id,
-                    region,
-                    DATE(snapshot_time) as date,
-                    MIN(price) as min_price,
-                    MAX(price) as max_price,
-                    AVG(price)::BIGINT as avg_price,
-                    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY price)::BIGINT as median_price,
-                    SUM(quantity) as total_quantity,
-                    COUNT(*) as auction_count,
-                    CASE
-                        WHEN COUNT(*) > 1 THEN STDDEV(price) / AVG(price) * 100
-                        ELSE 0
-                    END as volatility
-                FROM auction_prices
-                WHERE DATE(snapshot_time) = CURRENT_DATE - INTERVAL '1 day'
-                GROUP BY connected_realm_id, item_id, region, DATE(snapshot_time)
-                ON CONFLICT (connected_realm_id, item_id, region, date)
-                DO UPDATE SET
-                    min_price = EXCLUDED.min_price,
-                    max_price = EXCLUDED.max_price,
-                    avg_price = EXCLUDED.avg_price,
-                    median_price = EXCLUDED.median_price,
-                    total_quantity = EXCLUDED.total_quantity,
-                    auction_count = EXCLUDED.auction_count,
-                    volatility = EXCLUDED.volatility,
-                    created_at = CURRENT_TIMESTAMP
-            `);
-
-            await client.query('COMMIT');
-            console.log(`📊 Aggregated ${result.rowCount} daily price history records`);
-            return { recordsProcessed: result.rowCount };
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
-        }
-    },
-
-    calculatePriceTrends: async function(connectedRealmId, itemId, region) {
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-
-            const periods = ['7d', '30d', '90d'];
-            const trendResults = [];
-
-            for (const period of periods) {
-                const days = parseInt(period);
-
-                // Get price data for the period
-                const priceData = await client.query(`
-                    SELECT date, avg_price, volatility
-                    FROM price_history
-                    WHERE connected_realm_id = $1
-                    AND item_id = $2
-                    AND region = $3
-                    AND date >= CURRENT_DATE - INTERVAL '${days} days'
-                    ORDER BY date ASC
-                `, [connectedRealmId, itemId, region]);
-
-                if (priceData.rows.length < 2) continue;
-
-                const prices = priceData.rows.map(row => parseInt(row.avg_price));
-                const firstPrice = prices[0];
-                const lastPrice = prices[prices.length - 1];
-                const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-
-                // Calculate price change percentage
-                const priceChangePercent = ((lastPrice - firstPrice) / firstPrice) * 100;
-
-                // Determine trend direction
-                let trendDirection = 'stable';
-                if (Math.abs(priceChangePercent) > 5) {
-                    trendDirection = priceChangePercent > 0 ? 'up' : 'down';
-                }
-
-                // Calculate volatility score (average of daily volatilities)
-                const volatilities = priceData.rows
-                    .map(row => parseFloat(row.volatility || 0))
-                    .filter(v => v > 0);
-                const volatilityScore = volatilities.length > 0
-                    ? volatilities.reduce((a, b) => a + b, 0) / volatilities.length
-                    : 0;
-
-                // Upsert trend data
-                await client.query(`
-                    INSERT INTO price_trends (
-                        connected_realm_id, item_id, region, trend_period,
-                        avg_price, price_change_percent, trend_direction,
-                        volatility_score, data_points
-                    )
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                    ON CONFLICT (connected_realm_id, item_id, region, trend_period)
-                    DO UPDATE SET
-                        avg_price = EXCLUDED.avg_price,
-                        price_change_percent = EXCLUDED.price_change_percent,
-                        trend_direction = EXCLUDED.trend_direction,
-                        volatility_score = EXCLUDED.volatility_score,
-                        data_points = EXCLUDED.data_points,
-                        last_calculated = CURRENT_TIMESTAMP
-                `, [connectedRealmId, itemId, region, period, avgPrice, priceChangePercent,
-                    trendDirection, volatilityScore, priceData.rows.length]);
-
-                trendResults.push({
-                    period,
-                    avgPrice,
-                    priceChangePercent: Math.round(priceChangePercent * 100) / 100,
-                    trendDirection,
-                    volatilityScore: Math.round(volatilityScore * 100) / 100,
-                    dataPoints: priceData.rows.length
-                });
-            }
-
-            await client.query('COMMIT');
-            return trendResults;
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
-        }
-    },
-
-    getPriceHistory: async function(connectedRealmId, itemId, region, days = 30) {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(`
-                SELECT date, min_price, max_price, avg_price, median_price,
-                       total_quantity, auction_count, volatility
-                FROM price_history
-                WHERE connected_realm_id = $1 AND item_id = $2 AND region = $3
-                AND date >= CURRENT_DATE - INTERVAL '${days} days'
-                ORDER BY date ASC
-            `, [connectedRealmId, itemId, region]);
-
-            return result.rows;
-        } finally {
-            client.release();
-        }
-    },
-
-    getPriceTrends: async function(connectedRealmId, itemId, region) {
-        const client = await pool.connect();
-        try {
-            const result = await client.query(`
-                SELECT trend_period, avg_price, price_change_percent,
-                       trend_direction, volatility_score, data_points, last_calculated
-                FROM price_trends
-                WHERE connected_realm_id = $1 AND item_id = $2 AND region = $3
-                ORDER BY
-                    CASE trend_period
-                        WHEN '7d' THEN 1
-                        WHEN '30d' THEN 2
-                        WHEN '90d' THEN 3
-                        ELSE 4
-                    END
-            `, [connectedRealmId, itemId, region]);
-
-            return result.rows;
         } finally {
             client.release();
         }
