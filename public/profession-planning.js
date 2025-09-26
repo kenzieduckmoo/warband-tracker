@@ -655,18 +655,29 @@ function openCharacterModal(professionName) {
 
     modalProfessionName.textContent = professionName.charAt(0).toUpperCase() + professionName.slice(1);
 
+    // Filter characters to only show those with this profession
+    const charactersWithProfession = userCharacters.filter(character => {
+        if (!character.professions_list) return false;
+        const charProfessions = character.professions_list.split(', ').map(p => p.trim().toLowerCase());
+        return charProfessions.includes(professionName.toLowerCase());
+    });
+
     // Populate character list
     let html = '';
-    userCharacters.forEach(character => {
-        html += `
-            <div class="character-option" data-character="${character.name}" data-realm="${character.realm}" data-profession="${professionName}">
-                <div class="character-info">
-                    <div class="character-name">${character.name}</div>
-                    <div class="character-details">${character.level} ${character.class} - ${character.realm}</div>
+    if (charactersWithProfession.length === 0) {
+        html = '<div class="no-characters">No characters found with this profession</div>';
+    } else {
+        charactersWithProfession.forEach(character => {
+            html += `
+                <div class="character-option" data-character="${character.name}" data-realm="${character.realm}" data-profession="${professionName}">
+                    <div class="character-info">
+                        <div class="character-name">${character.name}</div>
+                        <div class="character-details">${character.level} ${character.class} - ${character.realm}</div>
+                    </div>
                 </div>
-            </div>
-        `;
-    });
+            `;
+        });
+    }
 
     characterList.innerHTML = html;
 

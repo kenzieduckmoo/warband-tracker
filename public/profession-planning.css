@@ -311,6 +311,13 @@ body {
     margin: 50px 0;
 }
 
+.no-characters {
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 40px 20px;
+}
+
 /* Buttons */
 .btn {
     padding: 10px 20px;
