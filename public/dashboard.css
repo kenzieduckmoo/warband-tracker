@@ -102,7 +102,7 @@ body {
     box-shadow: 0 0 12px rgba(0, 174, 255, 0.4);
 }
 
-.btn-refresh, .btn-logout, .btn-link, .header-info .btn-update-cache, .btn-populate-quest-cache {
+.btn-refresh, .btn-logout, .btn-link, .header-info .btn-update-cache {
     padding: 8px 16px;
     border: none;
     border-radius: 6px;
@@ -131,7 +131,7 @@ body {
     border: 1px solid #ff453a;
 }
 
-.btn-refresh:hover, .btn-link:hover, .btn-logout:hover, .header-info .btn-update-cache:hover, .btn-populate-quest-cache:hover {
+.btn-refresh:hover, .btn-link:hover, .btn-logout:hover, .header-info .btn-update-cache:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 174, 255, 0.3);
 }
@@ -297,31 +297,6 @@ body {
     box-shadow: none;
 }
 
-
-.btn-populate-quest-cache {
-    padding: 8px 16px;
-    background: rgba(138, 43, 226, 0.2);
-    color: #9370db;
-    border: 1px solid #9370db;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.9rem;
-    transition: all 0.3s;
-    white-space: nowrap;
-}
-
-.btn-populate-quest-cache:hover {
-    background: rgba(147, 112, 219, 0.3);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(147, 112, 219, 0.3);
-}
-
-.btn-populate-quest-cache:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-}
 
 .missing-coverage-grid {
     display: flex;

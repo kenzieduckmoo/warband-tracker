@@ -28,9 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Set up event listeners
     document.getElementById('refresh-btn').addEventListener('click', refreshAllData);
-    document.getElementById('populate-quest-cache-btn').addEventListener('click', populateQuestCache);
     document.getElementById('logout-btn').addEventListener('click', logout);
-    document.getElementById('update-recipe-cache-btn').addEventListener('click', updateRecipeCache);
     document.getElementById('region-select').addEventListener('change', handleRegionChange);
     
     // Set up faction tabs
@@ -95,238 +93,7 @@ async function loadDashboardData() {
     }
 }
 
-// Update recipe cache and character known recipes
-async function updateRecipeCache() {
-    const updateBtn = document.getElementById('update-recipe-cache-btn');
-    updateBtn.innerHTML = '<span class="loading-spinner"></span> Updating Cache...';
-    updateBtn.disabled = true;
-    
-    try {
-        // Call the recipe cache update endpoint
-        const response = await fetch('/api/update-recipe-cache', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log('Recipe cache update result:', result);
-            
-            // Show success message
-            showSuccessMessage('Recipe cache updated successfully!');
-            
-            // Reload dashboard data to show updated missing coverage
-            await loadDashboardData();
-        } else {
-            throw new Error('Failed to update recipe cache');
-        }
-    } catch (error) {
-        console.error('Failed to update recipe cache:', error);
-        showError('Failed to update recipe cache. Please try again.');
-    } finally {
-        updateBtn.innerHTML = '🔄 Update Recipe Cache';
-        updateBtn.disabled = false;
-    }
-}
-
-
-// Populate quest master cache from Blizzard API - now with job queue
-async function populateQuestCache() {
-    const populateBtn = document.getElementById('populate-quest-cache-btn');
-    populateBtn.innerHTML = '<span class="loading-spinner"></span> Queuing Quest Cache Job...';
-    populateBtn.disabled = true;
-
-    try {
-        // Start the job
-        const response = await fetch('/api/populate-quest-cache', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        if (response.ok) {
-            const result = await response.json();
-            console.log('Quest cache job queued:', result);
-
-            // Show queue position and start progress tracking
-            showSuccessMessage(
-                `Quest cache job queued successfully! Position in queue: ${result.queuePosition}. ` +
-                `Estimated wait time: ${result.estimatedWaitTime}`
-            );
-
-            // Start polling for job status
-            await pollJobStatus(result.jobId, populateBtn);
-
-        } else {
-            throw new Error('Failed to queue quest cache job');
-        }
-    } catch (error) {
-        console.error('Failed to populate quest cache:', error);
-        showError('Failed to queue quest cache job. Please try again.');
-        populateBtn.innerHTML = '📚 Populate Quest Cache';
-        populateBtn.disabled = false;
-    }
-}
-
-// Poll job status and update UI
-async function pollJobStatus(jobId, button) {
-    let pollCount = 0;
-    const maxPolls = 300; // 5 minutes max polling (1 poll per second)
-
-    const poll = async () => {
-        try {
-            const response = await fetch(`/api/quest-cache-status/${jobId}`);
-            if (!response.ok) {
-                throw new Error('Failed to get job status');
-            }
-
-            const job = await response.json();
-            console.log('Job status update:', job);
-
-            // Update button text based on job status
-            updateJobProgress(job, button);
-
-            // Check if job is complete
-            if (job.status === 'completed') {
-                showSuccessMessage(
-                    `Quest cache populated successfully! ` +
-                    `Processed ${job.progress.charactersProcessed}/${job.progress.totalCharacters} characters, ` +
-                    `${job.progress.questsProcessed} quests discovered, ` +
-                    `${job.progress.questsContributed} contributed to shared database.`
-                );
-
-                // Reload dashboard data to show updated zone tracking
-                await loadDashboardData();
-
-                button.innerHTML = '📚 Populate Quest Cache';
-                button.disabled = false;
-                return;
-
-            } else if (job.status === 'failed') {
-                showError(`Quest cache job failed: ${job.error}`);
-                button.innerHTML = '📚 Populate Quest Cache';
-                button.disabled = false;
-                return;
-
-            } else if (pollCount >= maxPolls) {
-                showError('Job status polling timed out. Job may still be running in background.');
-                button.innerHTML = '📚 Populate Quest Cache';
-                button.disabled = false;
-                return;
-            }
-
-            // Continue polling
-            pollCount++;
-            setTimeout(poll, 1000); // Poll every second
-
-        } catch (error) {
-            console.error('Error polling job status:', error);
-            showError('Lost connection to job status. Job may still be running in background.');
-            button.innerHTML = '📚 Populate Quest Cache';
-            button.disabled = false;
-        }
-    };
-
-    // Start polling
-    setTimeout(poll, 1000); // First poll after 1 second
-}
-
-// Update job progress display
-function updateJobProgress(job, button) {
-    let progressText = '';
-    let progressPercent = 0;
-
-    switch (job.status) {
-        case 'queued':
-            progressText = `Queued (Position: ${job.queuePosition})`;
-            progressPercent = 0;
-            break;
-
-        case 'processing':
-            switch (job.progress.phase) {
-                case 'starting':
-                    progressText = 'Starting...';
-                    progressPercent = 5;
-                    break;
-                case 'fetching_characters':
-                    progressText = 'Loading characters...';
-                    progressPercent = 10;
-                    break;
-                case 'processing_characters':
-                    const charPercent = job.progress.totalCharacters > 0 ?
-                        Math.round((job.progress.charactersProcessed / job.progress.totalCharacters) * 70) : 0;
-                    progressText = `Processing characters (${job.progress.charactersProcessed}/${job.progress.totalCharacters})`;
-                    progressPercent = 15 + charPercent;
-                    break;
-                case 'updating_summaries':
-                    progressText = 'Updating zone summaries...';
-                    progressPercent = 90;
-                    break;
-                case 'triggering_discovery':
-                    progressText = 'Starting background discovery...';
-                    progressPercent = 95;
-                    break;
-            }
-            break;
-
-        case 'completed':
-            progressText = 'Completed!';
-            progressPercent = 100;
-            break;
-
-        case 'failed':
-            progressText = 'Failed';
-            progressPercent = 0;
-            break;
-    }
-
-    // Update button with progress
-    button.innerHTML = `
-        <span class="loading-spinner"></span>
-        ${progressText}
-        ${progressPercent > 0 ? `(${progressPercent}%)` : ''}
-    `;
-
-    // Show additional details if available
-    if (job.progress.questsProcessed > 0) {
-        const details = `${job.progress.questsProcessed} quests, ${job.progress.questsContributed} contributed`;
-        button.title = details;
-    }
-}
-
-
-// Show success message
-function showSuccessMessage(message) {
-    // Create a temporary success notification
-    const notification = document.createElement('div');
-    notification.className = 'success-notification';
-    notification.textContent = message;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: rgba(0, 255, 136, 0.2);
-        color: #00ff88;
-        padding: 12px 20px;
-        border-radius: 8px;
-        border: 1px solid #00ff88;
-        z-index: 1000;
-        animation: slideIn 0.3s ease;
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-        notification.style.animation = 'slideOut 0.3s ease';
-        setTimeout(() => {
-            document.body.removeChild(notification);
-        }, 300);
-    }, 3000);
-}
+// Quest cache and recipe cache functions moved to admin panel only
 
 // Refresh all data from Battle.net API
 async function refreshAllData() {
@@ -343,12 +110,12 @@ async function refreshAllData() {
 
             // Show quest sync results if available
             if (result.questSync && result.questSync.charactersProcessed > 0) {
-                showSuccessMessage(
+                showSuccess(
                     `Character data refreshed successfully! Quest sync: ${result.questSync.charactersProcessed} characters processed, ` +
                     `${result.questSync.totalQuests} total quests, ${result.questSync.questsContributedToDatabase} contributed to shared database.`
                 );
             } else {
-                showSuccessMessage('Character data refreshed successfully! Quest data was recently synced (within 6 hours).');
+                showSuccess('Character data refreshed successfully! Quest data was recently synced (within 6 hours).');
             }
 
             // Reload dashboard with fresh data
@@ -1021,7 +788,7 @@ function renderQuestZones() {
     if (!container) return;
 
     if (!questZonesData || questZonesData.length === 0) {
-        container.innerHTML = '<div class="no-data">No incomplete quest zones found. Either all zones are complete or you need to populate the quest cache and sync quest data first.</div>';
+        container.innerHTML = '<div class="no-data">No incomplete quest zones found. Either all zones are complete or you need to use the admin panel to populate quest data first.</div>';
         return;
     }
 

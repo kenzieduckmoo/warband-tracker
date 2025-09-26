@@ -186,6 +186,135 @@ async function cacheRecipes() {
     }
 }
 
+async function populateQuestCache() {
+    clearResults();
+    const button = document.getElementById('populate-quest-cache-btn');
+
+    if (!button) return;
+
+    button.disabled = true;
+    button.innerHTML = '<span style="animation: spin 1s linear infinite; display: inline-block;">⟲</span> Starting...';
+
+    try {
+        showMessage('Starting quest cache population... This will scan all your characters.', 'info');
+        const response = await fetch('/api/populate-quest-cache', { method: 'POST' });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success && result.jobId) {
+            showMessage(`Quest cache job queued successfully! Job ID: ${result.jobId}`, 'success');
+
+            // Start polling for job status
+            await pollJobStatus(result.jobId, button);
+        } else {
+            throw new Error(result.error || 'Failed to start quest cache population');
+        }
+    } catch (error) {
+        showMessage('Failed to populate quest cache: ' + error.message, 'error');
+        button.innerHTML = '📚 Populate Quest Cache';
+        button.disabled = false;
+    }
+}
+
+async function pollJobStatus(jobId, button) {
+    let pollCount = 0;
+    const maxPolls = 300; // 5 minutes max polling
+
+    const poll = async () => {
+        try {
+            const response = await fetch(`/api/quest-cache-status/${jobId}`);
+            if (!response.ok) {
+                throw new Error('Failed to get job status');
+            }
+
+            const job = await response.json();
+            updateJobProgress(job, button);
+
+            if (job.status === 'completed') {
+                showMessage(
+                    `Quest cache populated successfully! ` +
+                    `Processed ${job.progress.charactersProcessed}/${job.progress.totalCharacters} characters, ` +
+                    `${job.progress.questsProcessed} quests discovered, ` +
+                    `${job.progress.questsContributed} contributed to shared database.`,
+                    'success'
+                );
+                button.innerHTML = '📚 Populate Quest Cache';
+                button.disabled = false;
+                return;
+            } else if (job.status === 'failed') {
+                showMessage(`Quest cache job failed: ${job.error}`, 'error');
+                button.innerHTML = '📚 Populate Quest Cache';
+                button.disabled = false;
+                return;
+            } else if (pollCount >= maxPolls) {
+                showMessage('Job status polling timed out. Job may still be running in background.', 'error');
+                button.innerHTML = '📚 Populate Quest Cache';
+                button.disabled = false;
+                return;
+            }
+
+            pollCount++;
+            setTimeout(poll, 1000);
+        } catch (error) {
+            showMessage('Lost connection to job status. Job may still be running in background.', 'error');
+            button.innerHTML = '📚 Populate Quest Cache';
+            button.disabled = false;
+        }
+    };
+
+    setTimeout(poll, 1000);
+}
+
+function updateJobProgress(job, button) {
+    let progressText = '';
+    let progressPercent = 0;
+
+    switch (job.status) {
+        case 'queued':
+            progressText = `Queued (Position: ${job.queuePosition})`;
+            break;
+        case 'processing':
+            switch (job.progress.phase) {
+                case 'starting':
+                    progressText = 'Starting...';
+                    progressPercent = 5;
+                    break;
+                case 'fetching_characters':
+                    progressText = 'Loading characters...';
+                    progressPercent = 10;
+                    break;
+                case 'processing_characters':
+                    const charPercent = job.progress.totalCharacters > 0 ?
+                        Math.round((job.progress.charactersProcessed / job.progress.totalCharacters) * 70) : 0;
+                    progressText = `Processing (${job.progress.charactersProcessed}/${job.progress.totalCharacters})`;
+                    progressPercent = 15 + charPercent;
+                    break;
+                case 'updating_summaries':
+                    progressText = 'Updating zone summaries...';
+                    progressPercent = 90;
+                    break;
+                case 'triggering_discovery':
+                    progressText = 'Starting background discovery...';
+                    progressPercent = 95;
+                    break;
+            }
+            break;
+        case 'completed':
+            progressText = 'Completed!';
+            progressPercent = 100;
+            break;
+        case 'failed':
+            progressText = 'Failed';
+            break;
+    }
+
+    button.innerHTML = `⟲ ${progressText}${progressPercent > 0 ? ` (${progressPercent}%)` : ''}`;
+}
+
 async function checkQuestDiscovery() {
     clearResults();
     showMessage('Quest discovery status check not implemented yet', 'info');
@@ -249,6 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('migrate-character-ids-btn')?.addEventListener('click', migrateCharacterIds);
 
     document.getElementById('cache-recipes-btn')?.addEventListener('click', cacheRecipes);
+    document.getElementById('populate-quest-cache-btn')?.addEventListener('click', populateQuestCache);
     document.getElementById('quest-discovery-btn')?.addEventListener('click', checkQuestDiscovery);
 
     document.getElementById('view-logs-btn')?.addEventListener('click', viewLogs);
