@@ -822,7 +822,7 @@ function renderQuestZones() {
                 <div class="zone-header">
                     <span class="zone-name">${zone.zone_name}</span>
                     ${wowheadLink}
-                    <span class="zone-incomplete-count incomplete-count" onclick="openQuestModal('${zone.zone_name}')">${zone.incomplete_quests} incomplete</span>
+                    <span class="zone-incomplete-count incomplete-count" data-zone-name="${zone.zone_name}">${zone.incomplete_quests} incomplete</span>
                 </div>
                 <div class="zone-completion">
                     <div class="completion-bar">
@@ -835,6 +835,14 @@ function renderQuestZones() {
     });
 
     container.innerHTML = html;
+
+    // Add event listeners to incomplete count elements
+    container.querySelectorAll('.incomplete-count').forEach(element => {
+        element.addEventListener('click', function() {
+            const zoneName = this.getAttribute('data-zone-name');
+            openQuestModal(zoneName);
+        });
+    });
 }
 
 // Quest Details Modal Functions
@@ -904,9 +912,24 @@ function closeQuestModal() {
     modal.classList.add('hidden');
 }
 
-// Close modal when pressing Escape key
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        closeQuestModal();
+// Set up modal event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Close modal when clicking backdrop
+    const backdrop = document.querySelector('.quest-modal-backdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', closeQuestModal);
     }
+
+    // Close modal when clicking close button
+    const closeButton = document.querySelector('.quest-modal-close');
+    if (closeButton) {
+        closeButton.addEventListener('click', closeQuestModal);
+    }
+
+    // Close modal when pressing Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeQuestModal();
+        }
+    });
 });
