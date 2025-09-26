@@ -1,15 +1,23 @@
 {
-  "currentVersion": "0.3.2",
-  "currentVersionDate": "2025-09-25",
+  "currentVersion": "0.3.3",
+  "currentVersionDate": "2025-09-26",
   "unreleased": [
-    "Fixed duplicate zones in Quest Zone Completion display",
-    "Fixed manual Refresh Data button bypassing 6-hour quest sync restriction",
-    "Added debug endpoints for database zone data investigation",
-    "Improved zone summary calculation to properly merge zones across expansions",
-    "Added comprehensive Admin Control Panel with API endpoint management",
-    "Added version tracking system with changelog page and Discord integration"
   ],
   "releases": {
+    "0.3.3": {
+      "date": "2025-09-26",
+      "title": "Admin Panel and Features Enhancement",
+      "changes": [
+        "Fixed duplicate zones in Quest Zone Completion display",
+        "Fixed manual Refresh Data button bypassing 6-hour quest sync restriction",
+        "Added debug endpoints for database zone data investigation",
+        "Improved zone summary calculation to properly merge zones across expansions",
+        "Added comprehensive Admin Control Panel with API endpoint management",
+        "Added version tracking system with changelog page and Discord integration",
+        "Added comprehensive Features page with how-to guide and promotional content"
+      ],
+      "type": "feature"
+    },
     "0.3.2": {
       "date": "2025-09-25",
       "title": "Database Consistency Fixes",

@@ -1036,21 +1036,21 @@ class RateLimiter {
 const questCacheJobQueue = new QuestCacheJobQueue();
 
 // Background quest discovery service
-async function backgroundQuestDiscovery(region, accessToken, maxQuests = 2000) {
+async function backgroundQuestDiscovery(region, accessToken, maxQuests = 20000) {
     console.log('🔍 Starting background quest discovery...');
 
     const questRanges = [
-        { start: 1, end: 15000, name: 'Classic', sample: 100 },
-        { start: 9000, end: 12000, name: 'Burning Crusade', sample: 60 },
-        { start: 11000, end: 14500, name: 'Wrath of the Lich King', sample: 70 },
-        { start: 14000, end: 29000, name: 'Cataclysm', sample: 150 },
-        { start: 28000, end: 35000, name: 'Mists of Pandaria', sample: 70 },
-        { start: 33000, end: 40000, name: 'Warlords of Draenor', sample: 70 },
-        { start: 38000, end: 48000, name: 'Legion', sample: 100 },
-        { start: 46000, end: 58000, name: 'Battle for Azeroth', sample: 120 },
-        { start: 57000, end: 66000, name: 'Shadowlands', sample: 90 },
-        { start: 65000, end: 82000, name: 'Dragonflight', sample: 150 },
-        { start: 80000, end: 95000, name: 'The War Within', sample: 150 },
+        { start: 1, end: 15000, name: 'Classic', sample: 200 },
+        { start: 9000, end: 12000, name: 'Burning Crusade', sample: 160 },
+        { start: 11000, end: 14500, name: 'Wrath of the Lich King', sample: 170 },
+        { start: 14000, end: 29000, name: 'Cataclysm', sample: 250 },
+        { start: 28000, end: 35000, name: 'Mists of Pandaria', sample: 170 },
+        { start: 33000, end: 40000, name: 'Warlords of Draenor', sample: 170 },
+        { start: 38000, end: 48000, name: 'Legion', sample: 200 },
+        { start: 46000, end: 58000, name: 'Battle for Azeroth', sample: 220 },
+        { start: 57000, end: 66000, name: 'Shadowlands', sample: 190 },
+        { start: 65000, end: 82000, name: 'Dragonflight', sample: 250 },
+        { start: 80000, end: 95000, name: 'The War Within', sample: 250 },
         // Future-proofing: Adaptive high-range scanning
         { start: 93000, end: 120000, name: 'Future Content', sample: 200 }
     ];
@@ -1157,7 +1157,7 @@ async function startPeriodicQuestDiscovery() {
     setTimeout(runDiscovery, 30000); // 30 second delay after server start
 
     // Then run every 2 hours
-    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 500);
+    questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 1000);
 }
 
 function stopPeriodicQuestDiscovery() {
@@ -1197,6 +1197,11 @@ app.get('/changelog', (req, res) => {
 // Admin panel route
 app.get('/admin', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Features page route
+app.get('/features', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'features.html'));
 });
 
 app.get('/characters', requireAuthRedirect, (req, res) => {

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Features - Warband Tracker</title>
+    <style>
+        /* CSS Variables */
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #1e2328;
+            --card-bg: #2a2f36;
+            --text-primary: #ffffff;
+            --text-secondary: #c1c7cd;
+            --accent-color: #f0b90b;
+            --accent-hover: #fdd835;
+            --border-color: #3c4043;
+            --success-color: #4caf50;
+            --error-color: #f44336;
+            --warning-color: #ff9800;
+            --blue-accent: #2196F3;
+            --purple-accent: #9C27B0;
+            --green-accent: #4CAF50;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        .features-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .hero-section {
+            text-align: center;
+            padding: 60px 20px;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--card-bg) 100%);
+            border-radius: 20px;
+            margin-bottom: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="%23f0b90b" stroke-width="0.3" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            z-index: 0;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-title {
+            font-size: 3.5em;
+            font-weight: bold;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, var(--accent-color), var(--blue-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.3em;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .cta-button {
+            background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+            color: var(--bg-primary);
+            padding: 15px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(240, 185, 11, 0.3);
+        }
+
+        .cta-button.secondary {
+            background: linear-gradient(135deg, var(--blue-accent), #1976D2);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-color);
+        }
+
+        .feature-icon {
+            font-size: 3em;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .feature-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        .feature-description {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            line-height: 1.7;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            margin: 8px 0;
+            color: var(--text-secondary);
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .feature-list li::before {
+            content: "✨";
+            position: absolute;
+            left: 0;
+        }
+
+        .section-title {
+            font-size: 2.5em;
+            text-align: center;
+            margin: 60px 0 40px 0;
+            background: linear-gradient(135deg, var(--accent-color), var(--purple-accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .how-to-section {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 40px;
+            margin: 40px 0;
+        }
+
+        .step-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            margin: 30px 0;
+            padding: 20px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .step-number {
+            background: var(--accent-color);
+            color: var(--bg-primary);
+            font-weight: bold;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1.2em;
+        }
+
+        .step-content h3 {
+            color: var(--text-primary);
+            margin: 0 0 10px 0;
+            font-size: 1.3em;
+        }
+
+        .step-content p {
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 40px 0;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 30px 20px;
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .stat-number {
+            font-size: 3em;
+            font-weight: bold;
+            color: var(--accent-color);
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: var(--accent-color);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .back-link:hover {
+            color: var(--accent-hover);
+        }
+
+        .testimonial {
+            background: linear-gradient(135deg, var(--purple-accent), #7B1FA2);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 40px 0;
+            text-align: center;
+            font-style: italic;
+            font-size: 1.2em;
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.5em;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cta-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .step-card {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: bold;
+        }
+
+        .pro-tip {
+            background: linear-gradient(135deg, var(--blue-accent), #1976D2);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #FFC107;
+        }
+
+        .pro-tip::before {
+            content: "💡 Pro Tip: ";
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="features-container">
+        <a href="/" class="back-link">← Back to Dashboard</a>
+
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <div class="hero-content">
+                <h1 class="hero-title">Warband Tracker</h1>
+                <p class="hero-subtitle">
+                    The ultimate WoW character management tool. Track your entire warband's progress,
+                    manage professions, discover missing quests, and optimize your gameplay across all characters.
+                </p>
+                <div class="cta-buttons">
+                    <a href="/auth/login" class="cta-button">Get Started Free</a>
+                    <a href="#how-to-use" class="cta-button secondary">Learn How</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">∞</div>
+                <div class="stat-label">Characters Tracked</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">100%</div>
+                <div class="stat-label">Free Forever</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">⚡</div>
+                <div class="stat-label">Real-time Sync</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">🔒</div>
+                <div class="stat-label">Secure & Private</div>
+            </div>
+        </div>
+
+        <!-- Main Features -->
+        <h2 class="section-title">Powerful Features for Serious Players</h2>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="feature-icon">👥</span>
+                <h3 class="feature-title">Complete Warband Overview</h3>
+                <p class="feature-description">
+                    See all your characters at a glance with intelligent filtering and sorting.
+                    Track levels, item levels, specs, and guilds across multiple servers.
+                </p>
+                <ul class="feature-list">
+                    <li>Level-based filtering (80s only, 70-80, 10-80)</li>
+                    <li>Item level and spec tracking</li>
+                    <li>Guild membership display</li>
+                    <li>Cross-server character management</li>
+                    <li>Active title display with proper formatting</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">⚒️</span>
+                <h3 class="feature-title">Advanced Profession Tracking</h3>
+                <p class="feature-description">
+                    Master your professions with detailed tracking of recipes, skill levels,
+                    and completion percentages. Never miss a recipe again.
+                </p>
+                <ul class="feature-list">
+                    <li>Real-time recipe knowledge tracking</li>
+                    <li>Missing recipe identification</li>
+                    <li>Skill level progress bars</li>
+                    <li>Cross-character profession coverage analysis</li>
+                    <li>Wowhead integration for easy recipe lookup</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">📋</span>
+                <h3 class="feature-title">Quest Zone Completion</h3>
+                <p class="feature-description">
+                    Discover unfinished business across Azeroth. Track quest completion
+                    by zone with intelligent progress tracking.
+                </p>
+                <ul class="feature-list">
+                    <li>Zone-by-zone completion percentages</li>
+                    <li>Missing quest identification</li>
+                    <li>Expansion-wide progress tracking</li>
+                    <li>Direct Wowhead zone links</li>
+                    <li>Automatic quest discovery</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">📊</span>
+                <h3 class="feature-title">Smart Analytics & Insights</h3>
+                <p class="feature-description">
+                    Get intelligent insights into your gameplay patterns and progression
+                    opportunities across your entire warband.
+                </p>
+                <ul class="feature-list">
+                    <li>Character progression analytics</li>
+                    <li>Profession gap analysis</li>
+                    <li>Quest completion statistics</li>
+                    <li>Cross-character comparisons</li>
+                    <li>Progress trend tracking</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">💰</span>
+                <h3 class="feature-title">WoW Token Integration</h3>
+                <p class="feature-description">
+                    Stay informed about WoW Token prices with real-time data integration.
+                    Make informed decisions about your subscription and gold.
+                </p>
+                <ul class="feature-list">
+                    <li>Real-time token price tracking</li>
+                    <li>Historical price trends</li>
+                    <li>Multi-region support</li>
+                    <li>Price alert notifications</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">📝</span>
+                <h3 class="feature-title">Character Notes & Planning</h3>
+                <p class="feature-description">
+                    Keep detailed notes for each character with auto-saving functionality.
+                    Plan your gameplay and track character-specific goals.
+                </p>
+                <ul class="feature-list">
+                    <li>Auto-saving character notes</li>
+                    <li>Goal tracking and planning</li>
+                    <li>Rich text formatting support</li>
+                    <li>Search and organization tools</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- How To Use Section -->
+        <div class="how-to-section" id="how-to-use">
+            <h2 class="section-title">How to Get Started</h2>
+
+            <div class="step-card">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Connect Your Battle.net Account</h3>
+                    <p>Securely link your Battle.net account using OAuth 2.0. We never store your password - only access tokens that let us fetch your character data safely.</p>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Select Your Region</h3>
+                    <p>Choose your WoW region (US, EU, etc.) to ensure we're tracking the right characters. You can switch regions anytime from the dashboard.</p>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Refresh Your Character Data</h3>
+                    <p>Click "Refresh Data" to pull all your level 10+ characters from Battle.net. This includes names, levels, specs, guilds, professions, and more.</p>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <h3>Populate Quest Cache (Optional)</h3>
+                    <p>For quest tracking, click "Populate Quest Cache" to scan all your characters' completed quests. This builds a comprehensive database for zone completion tracking.</p>
+                </div>
+            </div>
+
+            <div class="step-card">
+                <div class="step-number">5</div>
+                <div class="step-content">
+                    <h3>Explore and Optimize</h3>
+                    <p>Use the dashboard to filter characters, explore the character manager for detailed views, and check quest zones to find missing content!</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="pro-tip">
+            The "Populate Quest Cache" process can take a few minutes for players with many characters and thousands of completed quests. It runs in the background, so you can continue using the app while it works!
+        </div>
+
+        <!-- Advanced Features -->
+        <h2 class="section-title">Advanced Features</h2>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="feature-icon">🚀</span>
+                <h3 class="feature-title">Background Processing</h3>
+                <p class="feature-description">
+                    Heavy operations like quest scanning run in the background with real-time progress tracking.
+                </p>
+                <ul class="feature-list">
+                    <li>Non-blocking quest discovery</li>
+                    <li>Real-time progress updates</li>
+                    <li>Queue management for multiple users</li>
+                    <li>Smart rate limiting</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">⚡</span>
+                <h3 class="feature-title">Auto-Refresh Intelligence</h3>
+                <p class="feature-description">
+                    Smart data refresh that only updates when needed, saving time and API calls.
+                </p>
+                <ul class="feature-list">
+                    <li>Automatic refresh for old data (12+ hours)</li>
+                    <li>Manual refresh bypasses time restrictions</li>
+                    <li>Intelligent caching system</li>
+                    <li>Battle.net API rate limiting</li>
+                </ul>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">🔧</span>
+                <h3 class="feature-title">Admin Control Panel</h3>
+                <p class="feature-description">
+                    Comprehensive admin tools for managing your Warband Tracker instance.
+                </p>
+                <ul class="feature-list">
+                    <li>Database management tools</li>
+                    <li>Version tracking and changelog</li>
+                    <li>System health monitoring</li>
+                    <li>Debug and diagnostic tools</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Testimonial -->
+        <div class="testimonial">
+            "Warband Tracker has completely changed how I manage my 15+ characters. I can finally see what everyone needs and optimize my gameplay time. The quest tracking feature helped me find dozens of missed quests for achievements!"
+            <br><br>
+            <strong>- Dedicated WoW Player</strong>
+        </div>
+
+        <!-- Call to Action -->
+        <div class="hero-section" style="margin: 60px 0;">
+            <div class="hero-content">
+                <h2 style="font-size: 2.5em; margin-bottom: 20px;">Ready to Optimize Your Warband?</h2>
+                <p style="font-size: 1.2em; margin-bottom: 30px;">
+                    Join other dedicated players who use <span class="highlight">Warband Tracker</span> to maximize their WoW experience.
+                </p>
+                <div class="cta-buttons">
+                    <a href="/auth/login" class="cta-button">Start Tracking Now</a>
+                    <a href="/changelog" class="cta-button secondary">View Updates</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="footer.js"></script>
+</body>
+</html>
