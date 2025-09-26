@@ -1221,7 +1221,7 @@ async function startPeriodicQuestDiscovery() {
     };
 
     // Run immediately on startup (after a short delay)
-    setTimeout(runDiscovery, 30000); // 30 second delay after server start
+    setTimeout(runDiscovery, 60000); // 60 second delay after server start
 
     // Then run every 2 hours
     questDiscoveryInterval = setInterval(runDiscovery, 2 * 60 * 60 * 1000);

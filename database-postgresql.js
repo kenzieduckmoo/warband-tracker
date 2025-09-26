@@ -316,7 +316,12 @@ async function initDatabase() {
             }
         }
 
-        // Auction House Integration Tables
+        await client.query('COMMIT');
+        console.log('✅ Main database tables initialized successfully');
+
+        // Auction House Integration Tables - separate transaction
+        await client.query('BEGIN');
+
         try {
             await client.query(`
                 CREATE TABLE IF NOT EXISTS auction_prices (
