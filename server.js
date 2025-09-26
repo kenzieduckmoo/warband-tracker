@@ -294,11 +294,11 @@ async function updateRecipeCache() {
                         await new Promise(resolve => setTimeout(resolve, 100));
                         
                     } catch (tierErr) {
-                        console.error(`Failed to cache tier ${skillTier.name}:`, tierErr.message);
+                        console.error(`Failed to cache tier ${extractEnglishText(skillTier)}:`, tierErr.message);
                     }
                 }
             } catch (profErr) {
-                console.error(`Failed to process profession ${profession.name}:`, profErr.message);
+                console.error(`Failed to process profession ${extractEnglishText(profession)}:`, profErr.message);
             }
         }
         
@@ -2087,20 +2087,20 @@ app.post('/api/cache-recipes', async (req, res) => {
                         ) || 0;
                         
                         totalRecipesCached += recipeCount;
-                        console.log(`Cached ${recipeCount} recipes for ${profession.name} - ${skillTier.name}`);
+                        console.log(`Cached ${recipeCount} recipes for ${extractEnglishText(profession)} - ${extractEnglishText(skillTier)}`);
                         
                         // Small delay to avoid hitting API limits
                         await new Promise(resolve => setTimeout(resolve, 100));
                         
                     } catch (tierErr) {
-                        console.error(`Failed to cache tier ${skillTier.name} for ${profession.name}:`, tierErr.message);
+                        console.error(`Failed to cache tier ${extractEnglishText(skillTier)} for ${extractEnglishText(profession)}:`, tierErr.message);
                     }
                 }
                 
-                processedProfessions.push(profession.name);
+                processedProfessions.push(extractEnglishText(profession));
                 
             } catch (profErr) {
-                console.error(`Failed to process profession ${profession.name}:`, profErr.message);
+                console.error(`Failed to process profession ${extractEnglishText(profession)}:`, profErr.message);
             }
         }
         
