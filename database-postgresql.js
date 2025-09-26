@@ -1582,34 +1582,44 @@ const dbHelpers = {
                 // We'll aggregate this data later with the daily aggregation function
             }
 
-            console.log(`💾 Bulk inserting ${itemPrices.size} current auction summaries...`);
+            console.log(`💾 Batch inserting ${itemPrices.size} current auction summaries...`);
 
-            // Prepare bulk insert data
-            const insertValues = [];
-            const placeholders = [];
-            let paramIndex = 1;
+            // Process in batches to avoid PostgreSQL parameter limits
+            // PostgreSQL limit is ~65,535 parameters, so we can safely do ~9,000 rows × 7 params = 63,000 params
+            const batchSize = 9000; // Large batches for maximum performance while staying under limit
+            const itemPricesArray = Array.from(itemPrices);
+            let totalInserted = 0;
 
-            for (const [itemId, data] of itemPrices) {
-                const lowestPrice = Math.min(...data.prices);
-                const avgPrice = Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length);
+            for (let i = 0; i < itemPricesArray.length; i += batchSize) {
+                const batch = itemPricesArray.slice(i, i + batchSize);
+                const insertValues = [];
+                const placeholders = [];
+                let paramIndex = 1;
 
-                insertValues.push(
-                    connectedRealmId, itemId, lowestPrice, avgPrice,
-                    data.totalQuantity, data.auctionCount, region
-                );
+                for (const [itemId, data] of batch) {
+                    const lowestPrice = Math.min(...data.prices);
+                    const avgPrice = Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length);
 
-                placeholders.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6})`);
-                paramIndex += 7;
-            }
+                    insertValues.push(
+                        connectedRealmId, itemId, lowestPrice, avgPrice,
+                        data.totalQuantity, data.auctionCount, region
+                    );
 
-            // Single bulk INSERT instead of thousands of individual INSERTs
-            if (insertValues.length > 0) {
-                await client.query(`
-                    INSERT INTO current_auctions
-                    (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count, region)
-                    VALUES ${placeholders.join(', ')}
-                `, insertValues);
-                console.log(`✅ Bulk inserted ${itemPrices.size} auction summaries in single query`);
+                    placeholders.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6})`);
+                    paramIndex += 7;
+                }
+
+                // Batch INSERT
+                if (insertValues.length > 0) {
+                    await client.query(`
+                        INSERT INTO current_auctions
+                        (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count, region)
+                        VALUES ${placeholders.join(', ')}
+                    `, insertValues);
+
+                    totalInserted += batch.length;
+                    console.log(`✅ Inserted batch ${Math.ceil((i + batchSize) / batchSize)}/${Math.ceil(itemPricesArray.length / batchSize)}: ${totalInserted}/${itemPricesArray.length} summaries`);
+                }
             }
 
             console.log(`✅ Committing transaction for realm ${connectedRealmId}...`);
