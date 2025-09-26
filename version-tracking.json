@@ -21,7 +21,20 @@
     "Added cross-server price comparison APIs for profession planning optimization",
     "Updated auction data structure to support both commodities (connected_realm_id=0) and realm-specific pricing",
     "Added comprehensive error handling and timeout management for Battle.net API calls",
-    "Infrastructure complete for profession planning UI with real-time auction house pricing"
+    "Infrastructure complete for profession planning UI with real-time auction house pricing",
+    "MAJOR: Completed Profession Planning UI with Real-Time Auction House Integration",
+    "Built complete profession planning interface with sidebar showing all WoW professions",
+    "Added character selection interface showing characters with each profession (level, class, realm, item level)",
+    "Integrated missing recipe data parsing from dashboard coverage data (463+ recipes for Alchemy alone)",
+    "Implemented bulk auction house pricing API (/api/auction-prices-bulk) for efficient price loading",
+    "Added automatic chunking system for large recipe lists (1000+ recipes) to handle professions like Blacksmithing",
+    "Fixed auction house data preservation - now uses UPSERT instead of DELETE/INSERT to build historical data",
+    "Added profession main assignment system with character selection modal",
+    "Enhanced recipe display with commodity vs server-specific pricing indicators and Wowhead integration",
+    "Implemented recipe sorting (by cost, name) and shopping list export functionality",
+    "Added comprehensive validation for recipe IDs and auction house data integrity",
+    "Profession planning now shows real auction house costs (e.g., 375799g for missing Alchemy recipes)",
+    "Performance optimized: single bulk API call instead of 463+ individual requests per profession"
   ],
   "releases": {
     "0.3.3": {
