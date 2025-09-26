@@ -37,6 +37,14 @@ async function loadUserCharacters() {
         // The cached endpoint returns characters directly, not wrapped in a success object
         userCharacters = characters || [];
         console.log(`Loaded ${userCharacters.length} characters from cache`);
+
+        // Debug: show sample professions_list data
+        const sampleChar = userCharacters.find(c => c.professions_list);
+        if (sampleChar) {
+            console.log('Sample character professions_list:', sampleChar.professions_list);
+        } else {
+            console.log('No characters found with professions_list data');
+        }
     } catch (error) {
         console.error('Error loading characters:', error);
         throw error;
@@ -109,19 +117,24 @@ async function loadProfessionMains() {
 
 // Update the profession list display with current mains and character info
 function updateProfessionList() {
+    console.log('Updating profession list with', userCharacters.length, 'characters');
     const professionItems = document.querySelectorAll('.profession-item');
 
     professionItems.forEach(item => {
         const professionName = item.dataset.profession;
         const mainElement = item.querySelector('.profession-main');
 
-        // Find profession data from dashboard endpoint
-        const professionInfo = professionsData[professionName];
+        // Find characters with this profession from the character list
+        const charactersWithProfession = userCharacters.filter(character => {
+            if (!character.professions_list) return false;
+            const charProfessions = character.professions_list.split(', ').map(p => p.trim().toLowerCase());
+            return charProfessions.includes(professionName.toLowerCase());
+        });
 
-        if (professionInfo && professionInfo.length > 0) {
-            // Show character count and main assignment
-            const totalChars = professionInfo.reduce((sum, tier) => sum + tier.totalCharacters.size, 0);
+        const totalChars = charactersWithProfession.length;
+        console.log(`Profession ${professionName}: found ${totalChars} characters`);
 
+        if (totalChars > 0) {
             if (professionMains[professionName]) {
                 const main = professionMains[professionName];
                 mainElement.textContent = `Main: ${main.character} (${totalChars} total)`;
