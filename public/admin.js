@@ -167,6 +167,24 @@ async function migrateCharacterIds() {
     }
 }
 
+async function runDatabaseMigrations() {
+    clearResults();
+    try {
+        showMessage('Running database migrations... Adding region columns to auction tables.', 'info');
+        const response = await fetch('/api/admin/run-migrations', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage('Database migrations completed successfully!', 'success');
+            showCodeBlock('Migration Results', JSON.stringify(data.details, null, 2));
+        } else {
+            showMessage('Failed to run migrations: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to run migrations: ' + error.message, 'error');
+    }
+}
+
 // Quest & Recipe Management Functions
 async function cacheRecipes() {
     clearResults();
@@ -506,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('debug-zones-btn')?.addEventListener('click', debugZoneData);
     document.getElementById('debug-summary-btn')?.addEventListener('click', debugZoneSummary);
     document.getElementById('migrate-character-ids-btn')?.addEventListener('click', migrateCharacterIds);
+    document.getElementById('run-migrations-btn')?.addEventListener('click', runDatabaseMigrations);
 
     document.getElementById('cache-recipes-btn')?.addEventListener('click', cacheRecipes);
     document.getElementById('populate-quest-cache-btn')?.addEventListener('click', populateQuestCache);

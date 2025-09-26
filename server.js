@@ -2750,6 +2750,55 @@ app.post('/api/admin/cleanup-auction-data', async (req, res) => {
     }
 });
 
+// Database migration endpoint (admin)
+app.post('/api/admin/run-migrations', async (req, res) => {
+    try {
+        console.log('🔄 Manual database migration triggered by admin');
+
+        const client = await database.pool.connect();
+        try {
+            // Add region column to auction_prices if it doesn't exist
+            await client.query(`
+                ALTER TABLE auction_prices
+                ADD COLUMN IF NOT EXISTS region TEXT DEFAULT 'us'
+            `);
+
+            // Add region column to current_auctions if it doesn't exist
+            await client.query(`
+                ALTER TABLE current_auctions
+                ADD COLUMN IF NOT EXISTS region TEXT DEFAULT 'us'
+            `);
+
+            // Update existing records to have 'us' region if null
+            const updateResult1 = await client.query(`
+                UPDATE auction_prices
+                SET region = 'us'
+                WHERE region IS NULL
+            `);
+
+            const updateResult2 = await client.query(`
+                UPDATE current_auctions
+                SET region = 'us'
+                WHERE region IS NULL
+            `);
+
+            res.json({
+                success: true,
+                message: 'Database migrations completed successfully',
+                details: {
+                    auction_prices_updated: updateResult1.rowCount,
+                    current_auctions_updated: updateResult2.rowCount
+                }
+            });
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('❌ Failed to run migrations:', error);
+        res.status(500).json({ error: 'Failed to run migrations: ' + error.message });
+    }
+});
+
 // Price History and Analytics API Endpoints
 
 // Get price history for an item

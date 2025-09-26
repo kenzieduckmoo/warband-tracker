@@ -497,6 +497,9 @@ async function initDatabase() {
 
         await client.query('COMMIT');
         console.log('📊 PostgreSQL database initialized successfully');
+
+        // Run migrations after table creation
+        await runMigrations(client);
     } catch (error) {
         await client.query('ROLLBACK');
         throw error;
@@ -2013,6 +2016,59 @@ const dbHelpers = {
         }
     }
 };
+
+// Database migration function
+async function runMigrations(client) {
+    console.log('🔄 Running database migrations...');
+
+    try {
+        // Migration 1: Add region column to auction_prices if it doesn't exist
+        try {
+            await client.query(`
+                ALTER TABLE auction_prices
+                ADD COLUMN IF NOT EXISTS region TEXT DEFAULT 'us'
+            `);
+            console.log('✅ Migration: Added region column to auction_prices');
+        } catch (error) {
+            console.log('⚠️ Migration warning (auction_prices region):', error.message);
+        }
+
+        // Migration 2: Add region column to current_auctions if it doesn't exist
+        try {
+            await client.query(`
+                ALTER TABLE current_auctions
+                ADD COLUMN IF NOT EXISTS region TEXT DEFAULT 'us'
+            `);
+            console.log('✅ Migration: Added region column to current_auctions');
+        } catch (error) {
+            console.log('⚠️ Migration warning (current_auctions region):', error.message);
+        }
+
+        // Migration 3: Update existing auction data to have 'us' region if null
+        try {
+            const updateResult1 = await client.query(`
+                UPDATE auction_prices
+                SET region = 'us'
+                WHERE region IS NULL
+            `);
+            console.log(`✅ Migration: Updated ${updateResult1.rowCount} auction_prices records with default region`);
+
+            const updateResult2 = await client.query(`
+                UPDATE current_auctions
+                SET region = 'us'
+                WHERE region IS NULL
+            `);
+            console.log(`✅ Migration: Updated ${updateResult2.rowCount} current_auctions records with default region`);
+        } catch (error) {
+            console.log('⚠️ Migration warning (region updates):', error.message);
+        }
+
+        console.log('✅ Database migrations completed successfully');
+    } catch (error) {
+        console.error('❌ Migration error:', error.message);
+        // Don't throw - let the app continue even if migrations have issues
+    }
+}
 
 module.exports = {
     pool,
