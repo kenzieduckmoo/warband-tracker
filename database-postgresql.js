@@ -1582,23 +1582,34 @@ const dbHelpers = {
                 // We'll aggregate this data later with the daily aggregation function
             }
 
-            console.log(`💾 Inserting ${itemPrices.size} current auction summaries...`);
-            let insertedCount = 0;
+            console.log(`💾 Bulk inserting ${itemPrices.size} current auction summaries...`);
 
-            // Insert current auction summaries
+            // Prepare bulk insert data
+            const insertValues = [];
+            const placeholders = [];
+            let paramIndex = 1;
+
             for (const [itemId, data] of itemPrices) {
-                insertedCount++;
-                if (insertedCount % 1000 === 0) {
-                    console.log(`📝 Inserted ${insertedCount}/${itemPrices.size} auction summaries...`);
-                }
                 const lowestPrice = Math.min(...data.prices);
                 const avgPrice = Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length);
 
+                insertValues.push(
+                    connectedRealmId, itemId, lowestPrice, avgPrice,
+                    data.totalQuantity, data.auctionCount, region
+                );
+
+                placeholders.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6})`);
+                paramIndex += 7;
+            }
+
+            // Single bulk INSERT instead of thousands of individual INSERTs
+            if (insertValues.length > 0) {
                 await client.query(`
                     INSERT INTO current_auctions
                     (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count, region)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                `, [connectedRealmId, itemId, lowestPrice, avgPrice, data.totalQuantity, data.auctionCount, region]);
+                    VALUES ${placeholders.join(', ')}
+                `, insertValues);
+                console.log(`✅ Bulk inserted ${itemPrices.size} auction summaries in single query`);
             }
 
             console.log(`✅ Committing transaction for realm ${connectedRealmId}...`);
