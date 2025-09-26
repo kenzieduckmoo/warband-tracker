@@ -153,7 +153,18 @@ async function loadProfessionData(professionName) {
         showLoading('Loading recipe data...');
 
         const response = await fetch(`/api/profession-cost-analysis/${professionName}`);
+
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server response:', errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
         const data = await response.json();
+        console.log('Received data:', data);
 
         if (data.success) {
             displayProfessionData(data);
@@ -168,10 +179,16 @@ async function loadProfessionData(professionName) {
 
 // Display profession analysis data
 function displayProfessionData(data) {
-    // Update stats
-    document.getElementById('total-recipes').textContent = data.totalRecipes || 'N/A';
-    document.getElementById('missing-recipes').textContent = data.missingRecipes || 'N/A';
-    document.getElementById('estimated-cost').textContent = formatGold(data.totalCost || 0);
+    console.log('displayProfessionData received:', data);
+
+    // Update stats - map server response fields to UI
+    const totalRecipes = data.summary?.total_missing_recipes || 0;
+    const missingRecipes = data.summary?.total_missing_recipes || 0;
+    const totalCost = data.summary?.total_cost_copper || 0;
+
+    document.getElementById('total-recipes').textContent = totalRecipes;
+    document.getElementById('missing-recipes').textContent = missingRecipes;
+    document.getElementById('estimated-cost').textContent = formatGold(totalCost);
 
     // Display recipes
     displayRecipeList(data.recipes || []);

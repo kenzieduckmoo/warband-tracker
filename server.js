@@ -2384,8 +2384,12 @@ app.get('/api/profession-cost-analysis/:professionName', requireAuth, async (req
             // Continue anyway with existing data
         }
 
+        console.log(`Found character: ${professionCharacter.name} on ${professionCharacter.realm}`);
+        console.log(`Connected realm ID: ${connectedRealmId}`);
+
         // Get recipe cost analysis
         const costAnalysis = await database.getRecipeCostAnalysis(userId, connectedRealmId, professionName);
+        console.log(`Recipe cost analysis returned ${costAnalysis.length} recipes`);
 
         // Calculate totals
         let totalCost = 0;
@@ -2402,6 +2406,7 @@ app.get('/api/profession-cost-analysis/:professionName', requireAuth, async (req
         });
 
         res.json({
+            success: true,
             profession: professionName,
             character: {
                 name: professionCharacter.name,
