@@ -204,9 +204,30 @@ function displayProfessionDataFromDashboard(professionName) {
     const professionInfo = professionsData[professionName] || [];
 
     // Get missing recipes for this profession from missing coverage data
-    const missingRecipes = missingCoverageData.filter(recipe =>
-        recipe.profession_name.toLowerCase() === professionName.toLowerCase()
+    const missingTiers = missingCoverageData.filter(tier =>
+        tier.profession_name.toLowerCase() === professionName.toLowerCase()
     );
+
+    // Parse tier summaries into individual recipes
+    const missingRecipes = [];
+    missingTiers.forEach(tier => {
+        if (tier.missing_recipe_ids && tier.missing_recipe_names) {
+            const recipeIds = tier.missing_recipe_ids.split(', ').map(id => id.trim());
+            const recipeNames = tier.missing_recipe_names.split(', ').map(name => name.trim());
+
+            // Create individual recipe objects
+            recipeIds.forEach((recipeId, index) => {
+                const recipeName = recipeNames[index] || 'Unknown Recipe';
+                missingRecipes.push({
+                    recipe_id: parseInt(recipeId),
+                    recipe_name: recipeName,
+                    tier_name: tier.tier_name,
+                    tier_id: tier.tier_id,
+                    profession_name: tier.profession_name
+                });
+            });
+        }
+    });
 
     console.log('Profession info:', professionInfo);
     console.log('Missing recipes:', missingRecipes);
