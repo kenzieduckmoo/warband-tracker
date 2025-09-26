@@ -2532,6 +2532,76 @@ app.get('/api/auction-price/:itemId', requireAuth, async (req, res) => {
     }
 });
 
+// Get auction house prices for multiple items (bulk)
+app.post('/api/auction-prices-bulk', requireAuth, async (req, res) => {
+    try {
+        const { itemIds } = req.body;
+        const userId = req.session.userId;
+
+        // Validate input
+        if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+            return res.status(400).json({ error: 'Invalid or empty itemIds array' });
+        }
+
+        // Limit bulk requests to prevent abuse
+        if (itemIds.length > 1000) {
+            return res.status(400).json({ error: 'Too many items requested (max 1000)' });
+        }
+
+        const userRegion = await getUserRegionForAPI(userId);
+
+        // Get user's main realm (or first character's realm)
+        const characters = await database.getAllCharacters(userId);
+        if (characters.length === 0) {
+            return res.status(404).json({ error: 'No characters found' });
+        }
+
+        const mainCharacter = characters[0]; // Use first character for realm
+        const realmSlug = mainCharacter.realm.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/['']/g, '')
+            .replace(/[^a-z0-9-]/g, '');
+
+        let connectedRealmId;
+        try {
+            connectedRealmId = await getConnectedRealmId(realmSlug, userRegion);
+        } catch (realmError) {
+            console.error('Failed to get connected realm ID for bulk pricing:', realmError.message);
+            return res.status(500).json({ error: 'Could not determine realm for pricing' });
+        }
+
+        // Get bulk auction prices using existing function
+        const priceData = await database.getCurrentAuctionPrices(connectedRealmId, itemIds, userRegion);
+
+        // Convert array to object with item_id as key
+        const pricesMap = {};
+        priceData.forEach(item => {
+            pricesMap[item.item_id] = {
+                item_id: item.item_id,
+                lowest_price: item.lowest_price,
+                avg_price: item.avg_price,
+                total_quantity: item.total_quantity,
+                auction_count: item.auction_count,
+                is_commodity: item.auction_type === 'commodity',
+                last_updated: item.last_updated
+            };
+        });
+
+        res.json({
+            success: true,
+            realm: mainCharacter.realm,
+            connected_realm_id: connectedRealmId,
+            items_requested: itemIds.length,
+            items_found: priceData.length,
+            prices: pricesMap
+        });
+
+    } catch (error) {
+        console.error('Get bulk auction prices error:', error);
+        res.status(500).json({ error: 'Failed to get bulk auction prices' });
+    }
+});
+
 // Get missing recipes for a character's profession tier
 app.get('/api/missing-recipes/:characterId/:professionId/:tierId', requireAuth, async (req, res) => {
     try {

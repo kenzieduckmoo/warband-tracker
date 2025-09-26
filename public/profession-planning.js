@@ -201,7 +201,10 @@ function displayProfessionDataFromDashboard(professionName) {
     console.log(`Loading profession data for: ${professionName}`);
 
     // Get profession info from dashboard data
-    const professionInfo = professionsData[professionName] || [];
+    // The professionsData is an array, need to find profession by name
+    const professionInfo = Object.values(professionsData).flat().filter(prof =>
+        prof.name && prof.name.toLowerCase() === professionName.toLowerCase()
+    ) || [];
 
     // Get missing recipes for this profession from missing coverage data
     const missingTiers = missingCoverageData.filter(tier =>
@@ -233,7 +236,13 @@ function displayProfessionDataFromDashboard(professionName) {
     console.log('Missing recipes:', missingRecipes);
 
     // Calculate statistics
-    const totalCharacters = professionInfo.reduce((sum, tier) => sum + tier.totalCharacters.size, 0);
+    const totalCharacters = professionInfo.reduce((sum, tier) => {
+        if (tier.totalCharacters) {
+            // Handle if totalCharacters is a Set or number
+            return sum + (typeof tier.totalCharacters.size === 'number' ? tier.totalCharacters.size : tier.totalCharacters);
+        }
+        return sum;
+    }, 0);
     const totalMissingRecipes = missingRecipes.length;
 
     // Update stats display
@@ -353,70 +362,86 @@ function displayMissingRecipes(missingRecipes) {
     });
 }
 
-// Load auction house prices for missing recipes
+// Load auction house prices for missing recipes (bulk API call)
 async function loadAuctionHousePrices(missingRecipes) {
     if (missingRecipes.length === 0) return;
 
-    console.log('Loading auction prices for recipes:', missingRecipes);
+    console.log(`Loading bulk auction prices for ${missingRecipes.length} recipes...`);
 
-    let totalCost = 0;
-    let pricesFound = 0;
+    // Extract valid recipe IDs
+    const validRecipeIds = missingRecipes
+        .filter(recipe => recipe.recipe_id && !isNaN(recipe.recipe_id))
+        .map(recipe => recipe.recipe_id);
 
-    // Load prices for each recipe
-    for (const recipe of missingRecipes) {
-        // Validate recipe has a valid ID
-        if (!recipe.recipe_id || recipe.recipe_id === 'undefined') {
-            console.warn('Skipping recipe with invalid ID:', recipe);
-            const priceElement = document.getElementById(`price-${recipe.recipe_id || 'invalid'}`);
-            if (priceElement) {
-                priceElement.textContent = 'Invalid recipe ID';
-                priceElement.className = 'recipe-price no-price';
-            }
-            continue;
+    if (validRecipeIds.length === 0) {
+        console.warn('No valid recipe IDs found');
+        return;
+    }
+
+    try {
+        // Make a single bulk API call instead of individual calls
+        const response = await fetch('/api/auction-prices-bulk', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ itemIds: validRecipeIds })
+        });
+
+        const bulkPriceData = await response.json();
+
+        if (!bulkPriceData.success) {
+            throw new Error(bulkPriceData.error || 'Failed to load bulk pricing');
         }
 
-        try {
-            console.log(`Fetching price for recipe ID: ${recipe.recipe_id}`);
-            const response = await fetch(`/api/auction-price/${recipe.recipe_id}`);
-            const priceData = await response.json();
+        console.log(`Received bulk pricing data for ${Object.keys(bulkPriceData.prices || {}).length} items`);
 
+        let totalCost = 0;
+        let pricesFound = 0;
+
+        // Update UI with bulk pricing data
+        missingRecipes.forEach(recipe => {
             const priceElement = document.getElementById(`price-${recipe.recipe_id}`);
-            if (priceElement) {
-                if (priceData.success && priceData.price) {
-                    const price = parseInt(priceData.price);
-                    priceElement.textContent = formatGold(price);
-                    priceElement.className = 'recipe-price';
+            if (!priceElement) return;
 
-                    // Add auction type indicator
-                    const auctionTypeElement = priceElement.parentElement.parentElement.querySelector('.auction-type');
-                    if (priceData.is_commodity) {
-                        auctionTypeElement.textContent = '🌍 Commodity';
-                    } else {
-                        auctionTypeElement.textContent = '🏪 Server-specific';
-                    }
+            const priceData = bulkPriceData.prices[recipe.recipe_id];
 
-                    totalCost += price;
-                    pricesFound++;
+            if (priceData && priceData.lowest_price) {
+                const price = parseInt(priceData.lowest_price);
+                priceElement.textContent = formatGold(price);
+                priceElement.className = 'recipe-price';
+
+                // Add auction type indicator
+                const auctionTypeElement = priceElement.parentElement.parentElement.querySelector('.auction-type');
+                if (priceData.is_commodity) {
+                    auctionTypeElement.textContent = '🌍 Commodity';
                 } else {
-                    priceElement.textContent = 'Not available';
-                    priceElement.className = 'recipe-price no-price';
+                    auctionTypeElement.textContent = '🏪 Server-specific';
                 }
+
+                totalCost += price;
+                pricesFound++;
+            } else {
+                priceElement.textContent = 'Not available';
+                priceElement.className = 'recipe-price no-price';
             }
-        } catch (error) {
-            console.error(`Failed to load price for recipe ${recipe.recipe_id}:`, error);
+        });
+
+        // Update total estimated cost
+        document.getElementById('estimated-cost').textContent = formatGold(totalCost);
+
+        console.log(`Loaded prices for ${pricesFound}/${missingRecipes.length} recipes. Total cost: ${formatGold(totalCost)}`);
+
+    } catch (error) {
+        console.error('Failed to load bulk auction prices:', error);
+        // Fall back to showing "Price unavailable" for all
+        missingRecipes.forEach(recipe => {
             const priceElement = document.getElementById(`price-${recipe.recipe_id}`);
             if (priceElement) {
                 priceElement.textContent = 'Price unavailable';
                 priceElement.className = 'recipe-price no-price';
             }
-        }
-    }
-
-    // Update total estimated cost
-    document.getElementById('estimated-cost').textContent = formatGold(totalCost);
-
-    if (pricesFound > 0) {
-        console.log(`Loaded prices for ${pricesFound}/${missingRecipes.length} recipes. Total cost: ${formatGold(totalCost)}`);
+        });
     }
 }
 
