@@ -150,6 +150,23 @@ async function debugZoneSummary() {
     }
 }
 
+async function migrateCharacterIds() {
+    clearResults();
+    try {
+        showMessage('Starting character ID migration... This may take a moment.', 'info');
+        const response = await fetch('/api/migrate-character-ids', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage('Character ID migration completed successfully!', 'success');
+        } else {
+            showMessage('Failed to migrate character IDs: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to migrate character IDs: ' + error.message, 'error');
+    }
+}
+
 // Quest & Recipe Management Functions
 async function cacheRecipes() {
     clearResults();
@@ -229,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('recalc-zones-btn')?.addEventListener('click', recalculateZoneSummaries);
     document.getElementById('debug-zones-btn')?.addEventListener('click', debugZoneData);
     document.getElementById('debug-summary-btn')?.addEventListener('click', debugZoneSummary);
+    document.getElementById('migrate-character-ids-btn')?.addEventListener('click', migrateCharacterIds);
 
     document.getElementById('cache-recipes-btn')?.addEventListener('click', cacheRecipes);
     document.getElementById('quest-discovery-btn')?.addEventListener('click', checkQuestDiscovery);

@@ -49,6 +49,75 @@ function generateCharacterId(realmName, characterName) {
     return `${realmSlug}-${characterName.toLowerCase()}`;
 }
 
+// Helper function to migrate character IDs from old format to new format
+async function migrateCharacterIds() {
+    try {
+        console.log('🔄 Checking for character ID migration needs...');
+
+        // Get all characters that might have inconsistent IDs
+        const client = await database.pool.connect();
+        try {
+            // Find characters where the ID doesn't match our expected format
+            const result = await client.query(`
+                SELECT id, name, realm, user_id
+                FROM characters
+                WHERE id NOT LIKE CONCAT(
+                    LOWER(REPLACE(REPLACE(REPLACE(realm, ' ', '-'), '''', ''), '''', '')),
+                    '-',
+                    LOWER(name)
+                )
+                AND realm IS NOT NULL
+            `);
+
+            if (result.rows.length > 0) {
+                console.log(`Found ${result.rows.length} characters needing ID migration`);
+
+                for (const char of result.rows) {
+                    const newId = generateCharacterId(char.realm, char.name);
+
+                    if (char.id !== newId) {
+                        console.log(`Migrating ${char.id} -> ${newId}`);
+
+                        // Update the character record
+                        await client.query(`
+                            UPDATE characters
+                            SET id = $1
+                            WHERE id = $2 AND user_id = $3
+                        `, [newId, char.id, char.user_id]);
+
+                        // Update related tables
+                        await client.query(`
+                            UPDATE professions
+                            SET character_id = $1
+                            WHERE character_id = $2 AND user_id = $3
+                        `, [newId, char.id, char.user_id]);
+
+                        await client.query(`
+                            UPDATE character_known_recipes
+                            SET character_id = $1
+                            WHERE character_id = $2 AND user_id = $3
+                        `, [newId, char.id, char.user_id]);
+
+                        await client.query(`
+                            UPDATE character_notes
+                            SET character_id = $1
+                            WHERE character_id = $2 AND user_id = $3
+                        `, [newId, char.id, char.user_id]);
+                    }
+                }
+
+                console.log('✅ Character ID migration completed');
+            } else {
+                console.log('✅ No character ID migration needed');
+            }
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('❌ Character ID migration failed:', error);
+    }
+}
+
 const app = express();
 app.set('trust proxy', 1); // ADD THIS LINE - trust first proxy
 const PORT = process.env.PORT || 3000;
@@ -1178,9 +1247,13 @@ async function refreshUserCharacterData(userId, accessToken, userRegion, forceQu
         for (const char of account.characters) {
             if (char.level >= 10) {
                 try {
-                    // Get character details
+                    // Get character details - use consistent realm slug conversion
+                    const realmSlug = extractEnglishText(char.realm).toLowerCase()
+                        .replace(/\s+/g, '-')
+                        .replace(/['']/g, '')
+                        .replace(/[^a-z0-9-]/g, '');
                     const charDetails = await axios.get(
-                        `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}?namespace=profile-${userRegion}`,
+                        `https://${userRegion}.api.blizzard.com/profile/wow/character/${realmSlug}/${char.name.toLowerCase()}?namespace=profile-${userRegion}`,
                         {
                             headers: {
                                 'Authorization': `Bearer ${accessToken}`
@@ -1192,7 +1265,7 @@ async function refreshUserCharacterData(userId, accessToken, userRegion, forceQu
                     let titleData = null;
                     try {
                         const titlesResponse = await axios.get(
-                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/titles?namespace=profile-${userRegion}`,
+                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${realmSlug}/${char.name.toLowerCase()}/titles?namespace=profile-${userRegion}`,
                             {
                                 headers: {
                                     'Authorization': `Bearer ${accessToken}`
@@ -1214,7 +1287,7 @@ async function refreshUserCharacterData(userId, accessToken, userRegion, forceQu
                     let professions = [];
                     try {
                         const professionsResponse = await axios.get(
-                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${char.realm.slug}/${char.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
+                            `https://${userRegion}.api.blizzard.com/profile/wow/character/${realmSlug}/${char.name.toLowerCase()}/professions?namespace=profile-${userRegion}`,
                             {
                                 headers: {
                                     'Authorization': `Bearer ${accessToken}`
@@ -2220,6 +2293,17 @@ app.post('/api/create-version', async (req, res) => {
     }
 });
 
+// Character ID migration endpoint (admin)
+app.post('/api/migrate-character-ids', async (req, res) => {
+    try {
+        await migrateCharacterIds();
+        res.json({ success: true, message: 'Character ID migration completed successfully' });
+    } catch (error) {
+        console.error('Failed to migrate character IDs:', error);
+        res.status(500).json({ error: 'Failed to migrate character IDs' });
+    }
+});
+
 // Quest zone summary endpoint
 app.get('/api/quest-zones-summary', requireAuth, async (req, res) => {
     try {
@@ -2320,6 +2404,9 @@ const server = app.listen(PORT, async () => {
     try {
         await database.initDatabase();
         console.log('🗃️  Database initialized successfully');
+
+        // Run character ID migration
+        await migrateCharacterIds();
 
         // Start periodic quest discovery service
         await startPeriodicQuestDiscovery();
