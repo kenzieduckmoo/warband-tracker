@@ -2344,9 +2344,19 @@ app.get('/api/profession-cost-analysis/:professionName', requireAuth, async (req
 
         // Get user's main character for this profession (or first character with this profession)
         const characters = await database.getAllCharacters(userId);
-        const professionCharacter = characters.find(char =>
-            char.professions && char.professions.some(prof => prof.name === professionName)
+
+        // Debug logging to see what professions we have
+        console.log(`Looking for profession: "${professionName}"`);
+        const allProfessions = characters.flatMap(char =>
+            (char.professions_list || '').split(', ').filter(p => p.trim() !== '')
         );
+        console.log('Available professions:', [...new Set(allProfessions)]);
+
+        const professionCharacter = characters.find(char => {
+            if (!char.professions_list) return false;
+            const charProfessions = char.professions_list.split(', ').map(p => p.trim().toLowerCase());
+            return charProfessions.includes(professionName.toLowerCase());
+        });
 
         if (!professionCharacter) {
             return res.status(404).json({ error: 'No character found with this profession' });
