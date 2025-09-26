@@ -328,13 +328,89 @@ async function viewLogs() {
     // TODO: Add log viewing endpoint
 }
 
+// Auction House Management Functions
+async function updateAuctionData() {
+    clearResults();
+    try {
+        showMessage('Starting auction data update for all realms... This may take a few minutes.', 'info');
+        const response = await fetch('/api/admin/update-auction-house', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage(`Auction data updated successfully! Processed ${data.realmsUpdated} realms.`, 'success');
+            if (data.details) {
+                showCodeBlock('Update Details', JSON.stringify(data.details, null, 2));
+            }
+        } else {
+            showMessage('Failed to update auction data: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to update auction data: ' + error.message, 'error');
+    }
+}
+
+async function checkAuctionStatus() {
+    clearResults();
+    try {
+        const response = await fetch('/api/admin/auction-house-status');
+        const data = await response.json();
+
+        showCodeBlock('Auction House Status', JSON.stringify(data, null, 2));
+
+        if (data.success) {
+            showMessage(`Status retrieved: ${data.realmsWithData} realms have auction data`, 'info');
+        } else {
+            showMessage('Failed to retrieve auction status', 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to check auction status: ' + error.message, 'error');
+    }
+}
+
+async function cleanupAuctionData() {
+    clearResults();
+    try {
+        showMessage('Cleaning up old auction data...', 'info');
+        const response = await fetch('/api/admin/cleanup-auction-data', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage(`Cleanup completed! Removed ${data.recordsRemoved} old auction records.`, 'success');
+        } else {
+            showMessage('Failed to cleanup auction data: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to cleanup auction data: ' + error.message, 'error');
+    }
+}
+
+async function viewProfessionMains() {
+    clearResults();
+    try {
+        const response = await fetch('/api/profession-mains');
+        const data = await response.json();
+
+        showCodeBlock('Profession Main Assignments', JSON.stringify(data, null, 2));
+
+        if (data.success) {
+            const assignments = data.assignments || [];
+            showMessage(`Found ${assignments.length} profession main assignments`, 'info');
+        } else {
+            showMessage('Failed to retrieve profession mains', 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to view profession mains: ' + error.message, 'error');
+    }
+}
+
 async function checkApiStatus() {
     clearResults();
     try {
         // Check multiple endpoints to verify system health
         const checks = [
             { name: 'Changelog API', url: '/api/changelog' },
-            { name: 'Token API', url: '/api/wow-token' }
+            { name: 'Token API', url: '/api/wow-token' },
+            { name: 'Profession Mains API', url: '/api/profession-mains' }
         ];
 
         const results = [];
@@ -380,6 +456,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cache-recipes-btn')?.addEventListener('click', cacheRecipes);
     document.getElementById('populate-quest-cache-btn')?.addEventListener('click', populateQuestCache);
     document.getElementById('quest-discovery-btn')?.addEventListener('click', checkQuestDiscovery);
+
+    document.getElementById('update-auctions-btn')?.addEventListener('click', updateAuctionData);
+    document.getElementById('auction-status-btn')?.addEventListener('click', checkAuctionStatus);
+    document.getElementById('cleanup-auctions-btn')?.addEventListener('click', cleanupAuctionData);
+    document.getElementById('profession-mains-btn')?.addEventListener('click', viewProfessionMains);
 
     document.getElementById('view-logs-btn')?.addEventListener('click', viewLogs);
     document.getElementById('api-status-btn')?.addEventListener('click', checkApiStatus);

@@ -2527,6 +2527,158 @@ app.post('/api/migrate-character-ids', async (req, res) => {
     }
 });
 
+// Auction House Admin Endpoints
+
+// Update auction house data for all realms (admin)
+app.post('/api/admin/update-auction-house', async (req, res) => {
+    try {
+        console.log('🏪 Manual auction house update triggered by admin');
+
+        // Get all unique realms from our user database
+        const client = await database.pool.connect();
+        let realmsUpdated = 0;
+        const updateDetails = [];
+
+        try {
+            const realmsResult = await client.query(`
+                SELECT DISTINCT realm_slug
+                FROM characters
+                WHERE realm_slug IS NOT NULL
+                AND realm_slug != ''
+            `);
+
+            const accessToken = await getClientCredentialsToken('us');
+
+            for (const row of realmsResult.rows) {
+                const realmSlug = row.realm_slug;
+                try {
+                    console.log(`🔄 Updating auction data for ${realmSlug}...`);
+                    await updateAuctionHouseData(realmSlug);
+                    realmsUpdated++;
+                    updateDetails.push({ realm: realmSlug, status: 'success' });
+
+                    // Small delay between realm updates to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } catch (error) {
+                    console.error(`❌ Failed to update ${realmSlug}:`, error.message);
+                    updateDetails.push({ realm: realmSlug, status: 'failed', error: error.message });
+                }
+            }
+
+        } finally {
+            client.release();
+        }
+
+        res.json({
+            success: true,
+            realmsUpdated,
+            totalRealms: updateDetails.length,
+            details: updateDetails,
+            message: `Updated auction data for ${realmsUpdated} realms`
+        });
+    } catch (error) {
+        console.error('❌ Failed to update auction house data:', error);
+        res.status(500).json({ error: 'Failed to update auction house data: ' + error.message });
+    }
+});
+
+// Get auction house status (admin)
+app.get('/api/admin/auction-house-status', async (req, res) => {
+    try {
+        const client = await database.pool.connect();
+        try {
+            // Get auction data freshness by realm
+            const auctionStatus = await client.query(`
+                SELECT
+                    realm_slug,
+                    COUNT(*) as auction_count,
+                    MAX(last_updated) as last_updated,
+                    MIN(last_updated) as oldest_data,
+                    AVG(price) as avg_price
+                FROM current_auctions
+                GROUP BY realm_slug
+                ORDER BY last_updated DESC
+            `);
+
+            // Get price history data status
+            const priceHistoryStatus = await client.query(`
+                SELECT
+                    COUNT(*) as total_price_records,
+                    COUNT(DISTINCT item_id) as unique_items,
+                    COUNT(DISTINCT realm_slug) as realms_with_price_data,
+                    MAX(last_seen) as most_recent_price,
+                    MIN(last_seen) as oldest_price
+                FROM auction_prices
+            `);
+
+            // Get profession mains status
+            const professionStatus = await client.query(`
+                SELECT
+                    COUNT(*) as total_assignments,
+                    COUNT(DISTINCT user_id) as users_with_mains,
+                    COUNT(DISTINCT profession_name) as professions_assigned
+                FROM profession_mains
+            `);
+
+            res.json({
+                success: true,
+                realmsWithData: auctionStatus.rows.length,
+                auctionData: auctionStatus.rows,
+                priceHistory: priceHistoryStatus.rows[0],
+                professionMains: professionStatus.rows[0],
+                lastUpdated: new Date().toISOString()
+            });
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('❌ Failed to get auction house status:', error);
+        res.status(500).json({ error: 'Failed to get auction house status: ' + error.message });
+    }
+});
+
+// Cleanup old auction data (admin)
+app.post('/api/admin/cleanup-auction-data', async (req, res) => {
+    try {
+        const client = await database.pool.connect();
+        let recordsRemoved = 0;
+
+        try {
+            // Remove auction data older than 24 hours
+            const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+            // Clean current_auctions
+            const currentAuctionsResult = await client.query(`
+                DELETE FROM current_auctions
+                WHERE last_updated < $1
+            `, [cutoffTime]);
+
+            // Clean old auction_prices (keep only last 30 days)
+            const pricesCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const pricesResult = await client.query(`
+                DELETE FROM auction_prices
+                WHERE last_seen < $1
+            `, [pricesCutoff]);
+
+            recordsRemoved = currentAuctionsResult.rowCount + pricesResult.rowCount;
+
+            console.log(`🧹 Cleaned up ${recordsRemoved} old auction records`);
+
+        } finally {
+            client.release();
+        }
+
+        res.json({
+            success: true,
+            recordsRemoved,
+            message: `Removed ${recordsRemoved} old auction records`
+        });
+    } catch (error) {
+        console.error('❌ Failed to cleanup auction data:', error);
+        res.status(500).json({ error: 'Failed to cleanup auction data: ' + error.message });
+    }
+});
+
 // Quest zone summary endpoint
 app.get('/api/quest-zones-summary', requireAuth, async (req, res) => {
     try {
