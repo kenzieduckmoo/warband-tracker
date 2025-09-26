@@ -325,8 +325,8 @@ async function updateAuctionHouseData(connectedRealmId, region = 'us') {
         );
 
         if (response.data && response.data.auctions) {
-            const result = await database.upsertAuctionData(connectedRealmId, response.data.auctions);
-            console.log(`✅ Updated auction data for realm ${connectedRealmId}: ${result.itemsProcessed} items, ${result.auctionsProcessed} auctions`);
+            const result = await database.upsertAuctionData(connectedRealmId, response.data.auctions, region);
+            console.log(`✅ Updated auction data for realm ${connectedRealmId} (${region.toUpperCase()}): ${result.itemsProcessed} items, ${result.auctionsProcessed} auctions`);
             return result;
         } else {
             console.log(`⚠️ No auction data returned for realm ${connectedRealmId}`);
@@ -2540,28 +2540,47 @@ app.post('/api/admin/update-auction-house', async (req, res) => {
         const updateDetails = [];
 
         try {
+            // Get all unique realms with their user regions
             const realmsResult = await client.query(`
-                SELECT DISTINCT realm_slug
-                FROM characters
-                WHERE realm_slug IS NOT NULL
-                AND realm_slug != ''
+                SELECT DISTINCT c.realm, u.region
+                FROM characters c
+                JOIN users u ON c.user_id = u.id
+                WHERE c.realm IS NOT NULL
+                AND c.realm != ''
+                AND u.region IS NOT NULL
             `);
 
-            const accessToken = await getClientCredentialsToken('us');
-
             for (const row of realmsResult.rows) {
-                const realmSlug = row.realm_slug;
+                const realmSlug = row.realm;
+                const region = row.region || 'us'; // Default to US if no region
+
                 try {
-                    console.log(`🔄 Updating auction data for ${realmSlug}...`);
-                    await updateAuctionHouseData(realmSlug);
+                    console.log(`🔄 Updating auction data for ${realmSlug} (${region.toUpperCase()})...`);
+
+                    // Get connected realm ID for this realm and region
+                    const connectedRealmId = await getConnectedRealmId(realmSlug, region);
+
+                    // Update auction house data with proper region
+                    await updateAuctionHouseData(connectedRealmId, region);
+
                     realmsUpdated++;
-                    updateDetails.push({ realm: realmSlug, status: 'success' });
+                    updateDetails.push({
+                        realm: realmSlug,
+                        region: region.toUpperCase(),
+                        connectedRealmId,
+                        status: 'success'
+                    });
 
                     // Small delay between realm updates to avoid rate limiting
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (error) {
-                    console.error(`❌ Failed to update ${realmSlug}:`, error.message);
-                    updateDetails.push({ realm: realmSlug, status: 'failed', error: error.message });
+                    console.error(`❌ Failed to update ${realmSlug} (${region}):`, error.message);
+                    updateDetails.push({
+                        realm: realmSlug,
+                        region: region.toUpperCase(),
+                        status: 'failed',
+                        error: error.message
+                    });
                 }
             }
 
@@ -2676,6 +2695,307 @@ app.post('/api/admin/cleanup-auction-data', async (req, res) => {
     } catch (error) {
         console.error('❌ Failed to cleanup auction data:', error);
         res.status(500).json({ error: 'Failed to cleanup auction data: ' + error.message });
+    }
+});
+
+// Price History and Analytics API Endpoints
+
+// Get price history for an item
+app.get('/api/price-history/:connectedRealmId/:itemId/:region', requireAuth, async (req, res) => {
+    try {
+        const { connectedRealmId, itemId, region } = req.params;
+        const days = parseInt(req.query.days) || 30;
+
+        const history = await database.getPriceHistory(
+            parseInt(connectedRealmId),
+            parseInt(itemId),
+            region,
+            days
+        );
+
+        res.json({
+            success: true,
+            connectedRealmId: parseInt(connectedRealmId),
+            itemId: parseInt(itemId),
+            region,
+            days,
+            history
+        });
+    } catch (error) {
+        console.error('❌ Failed to get price history:', error);
+        res.status(500).json({ error: 'Failed to get price history: ' + error.message });
+    }
+});
+
+// Get price trends for an item
+app.get('/api/price-trends/:connectedRealmId/:itemId/:region', requireAuth, async (req, res) => {
+    try {
+        const { connectedRealmId, itemId, region } = req.params;
+
+        const trends = await database.getPriceTrends(
+            parseInt(connectedRealmId),
+            parseInt(itemId),
+            region
+        );
+
+        res.json({
+            success: true,
+            connectedRealmId: parseInt(connectedRealmId),
+            itemId: parseInt(itemId),
+            region,
+            trends
+        });
+    } catch (error) {
+        console.error('❌ Failed to get price trends:', error);
+        res.status(500).json({ error: 'Failed to get price trends: ' + error.message });
+    }
+});
+
+// Calculate price trends for an item (admin/manual trigger)
+app.post('/api/admin/calculate-price-trends/:connectedRealmId/:itemId/:region', async (req, res) => {
+    try {
+        const { connectedRealmId, itemId, region } = req.params;
+
+        const trendResults = await database.calculatePriceTrends(
+            parseInt(connectedRealmId),
+            parseInt(itemId),
+            region
+        );
+
+        res.json({
+            success: true,
+            connectedRealmId: parseInt(connectedRealmId),
+            itemId: parseInt(itemId),
+            region,
+            trends: trendResults,
+            message: `Calculated trends for ${trendResults.length} time periods`
+        });
+    } catch (error) {
+        console.error('❌ Failed to calculate price trends:', error);
+        res.status(500).json({ error: 'Failed to calculate price trends: ' + error.message });
+    }
+});
+
+// Aggregate daily price history (admin endpoint for background processing)
+app.post('/api/admin/aggregate-price-history', async (req, res) => {
+    try {
+        console.log('📊 Manual price history aggregation triggered');
+        const result = await database.aggregateDailyPriceHistory();
+
+        res.json({
+            success: true,
+            recordsProcessed: result.recordsProcessed,
+            message: `Aggregated ${result.recordsProcessed} daily price history records`
+        });
+    } catch (error) {
+        console.error('❌ Failed to aggregate price history:', error);
+        res.status(500).json({ error: 'Failed to aggregate price history: ' + error.message });
+    }
+});
+
+// Cross-Server Optimization API Endpoints
+
+// Get cross-server price comparison for an item
+app.get('/api/cross-server/price-comparison/:itemId/:region', requireAuth, async (req, res) => {
+    try {
+        const { itemId, region } = req.params;
+
+        const client = await database.pool.connect();
+        try {
+            // Get current prices across all connected realms for this region
+            const result = await client.query(`
+                SELECT
+                    ca.connected_realm_id,
+                    ca.lowest_price,
+                    ca.avg_price,
+                    ca.total_quantity,
+                    ca.auction_count,
+                    ca.last_updated,
+                    STRING_AGG(cr.realm_name, ', ') as realm_names,
+                    STRING_AGG(cr.realm_slug, ', ') as realm_slugs
+                FROM current_auctions ca
+                JOIN connected_realms cr ON ca.connected_realm_id = cr.connected_realm_id
+                    AND ca.region = cr.region
+                WHERE ca.item_id = $1 AND ca.region = $2
+                GROUP BY ca.connected_realm_id, ca.lowest_price, ca.avg_price,
+                         ca.total_quantity, ca.auction_count, ca.last_updated
+                ORDER BY ca.lowest_price ASC
+            `, [parseInt(itemId), region]);
+
+            res.json({
+                success: true,
+                itemId: parseInt(itemId),
+                region,
+                priceComparison: result.rows,
+                cheapestRealm: result.rows.length > 0 ? result.rows[0] : null,
+                totalRealms: result.rows.length
+            });
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('❌ Failed to get cross-server price comparison:', error);
+        res.status(500).json({ error: 'Failed to get cross-server price comparison: ' + error.message });
+    }
+});
+
+// Get arbitrage opportunities for a profession
+app.get('/api/cross-server/arbitrage/:professionName/:region', requireAuth, async (req, res) => {
+    try {
+        const { professionName, region } = req.params;
+        const maxInvestment = parseInt(req.query.maxInvestment) || 1000000; // Default 100g
+
+        const client = await database.pool.connect();
+        try {
+            // Find items with significant price differences across realms
+            const result = await client.query(`
+                WITH profession_items AS (
+                    SELECT DISTINCT recipe_id as item_id
+                    FROM cached_recipes
+                    WHERE profession_name = $1
+                ),
+                price_stats AS (
+                    SELECT
+                        ca.item_id,
+                        ca.connected_realm_id,
+                        ca.lowest_price,
+                        ca.total_quantity,
+                        STRING_AGG(cr.realm_name, ', ') as realm_names,
+                        MIN(ca.lowest_price) OVER (PARTITION BY ca.item_id) as global_min_price,
+                        MAX(ca.lowest_price) OVER (PARTITION BY ca.item_id) as global_max_price
+                    FROM current_auctions ca
+                    JOIN connected_realms cr ON ca.connected_realm_id = cr.connected_realm_id
+                        AND ca.region = cr.region
+                    JOIN profession_items pi ON ca.item_id = pi.item_id
+                    WHERE ca.region = $2
+                    AND ca.lowest_price <= $3
+                )
+                SELECT
+                    item_id,
+                    connected_realm_id,
+                    realm_names,
+                    lowest_price,
+                    total_quantity,
+                    global_min_price,
+                    global_max_price,
+                    (global_max_price - global_min_price) as potential_profit,
+                    ROUND(((global_max_price - global_min_price)::DECIMAL / global_min_price) * 100, 2) as profit_percentage
+                FROM price_stats
+                WHERE global_max_price > global_min_price * 1.2  -- At least 20% difference
+                AND lowest_price = global_min_price  -- Only show the cheapest realms
+                ORDER BY profit_percentage DESC, potential_profit DESC
+                LIMIT 20
+            `, [professionName, region, maxInvestment]);
+
+            res.json({
+                success: true,
+                professionName,
+                region,
+                maxInvestment,
+                arbitrageOpportunities: result.rows,
+                opportunityCount: result.rows.length
+            });
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('❌ Failed to get arbitrage opportunities:', error);
+        res.status(500).json({ error: 'Failed to get arbitrage opportunities: ' + error.message });
+    }
+});
+
+// Get connected realms mapping for a region
+app.get('/api/connected-realms/:region', requireAuth, async (req, res) => {
+    try {
+        const { region } = req.params;
+        const realms = await database.getConnectedRealms(region);
+
+        // Group by connected_realm_id
+        const realmGroups = {};
+        realms.forEach(realm => {
+            if (!realmGroups[realm.connected_realm_id]) {
+                realmGroups[realm.connected_realm_id] = {
+                    connected_realm_id: realm.connected_realm_id,
+                    region: realm.region,
+                    realms: []
+                };
+            }
+            realmGroups[realm.connected_realm_id].realms.push({
+                slug: realm.realm_slug,
+                name: realm.realm_name,
+                locale: realm.locale,
+                timezone: realm.timezone,
+                population: realm.population
+            });
+        });
+
+        res.json({
+            success: true,
+            region,
+            connectedRealmGroups: Object.values(realmGroups),
+            totalRealms: realms.length
+        });
+    } catch (error) {
+        console.error('❌ Failed to get connected realms:', error);
+        res.status(500).json({ error: 'Failed to get connected realms: ' + error.message });
+    }
+});
+
+// Update connected realm mapping (admin)
+app.post('/api/admin/update-connected-realms/:region', async (req, res) => {
+    try {
+        const { region } = req.params;
+        console.log(`🌐 Updating connected realm mapping for ${region.toUpperCase()}...`);
+
+        const accessToken = await getClientCredentialsToken(region);
+        let realmGroupsUpdated = 0;
+
+        // Get list of all connected realms for the region
+        const connectedRealmsResponse = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/connected-realm/index?namespace=dynamic-${region}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            }
+        );
+
+        if (connectedRealmsResponse.data?.connected_realms) {
+            for (const connectedRealmRef of connectedRealmsResponse.data.connected_realms) {
+                // Extract connected realm ID from URL
+                const urlParts = connectedRealmRef.href.split('/');
+                const connectedRealmId = parseInt(urlParts[urlParts.length - 1].split('?')[0]);
+
+                try {
+                    // Get detailed data for this connected realm
+                    const detailResponse = await axios.get(connectedRealmRef.href, {
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                        }
+                    });
+
+                    if (detailResponse.data) {
+                        await database.updateConnectedRealmMapping(connectedRealmId, detailResponse.data, region);
+                        realmGroupsUpdated++;
+                    }
+
+                    // Rate limiting delay
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (error) {
+                    console.error(`❌ Failed to update connected realm ${connectedRealmId}:`, error.message);
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            region,
+            realmGroupsUpdated,
+            message: `Updated ${realmGroupsUpdated} connected realm groups for ${region.toUpperCase()}`
+        });
+    } catch (error) {
+        console.error('❌ Failed to update connected realms:', error);
+        res.status(500).json({ error: 'Failed to update connected realms: ' + error.message });
     }
 });
 
