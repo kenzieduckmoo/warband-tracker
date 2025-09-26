@@ -22,15 +22,17 @@ document.addEventListener('DOMContentLoaded', async function() {
 // Load user characters for profession assignment
 async function loadUserCharacters() {
     try {
-        const response = await fetch('/api/characters');
-        const data = await response.json();
+        const response = await fetch('/api/characters-cached');
 
-        if (data.success) {
-            userCharacters = data.characters || [];
-            console.log(`Loaded ${userCharacters.length} characters`);
-        } else {
-            throw new Error(data.error || 'Failed to load characters');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+
+        const characters = await response.json();
+
+        // The cached endpoint returns characters directly, not wrapped in a success object
+        userCharacters = characters || [];
+        console.log(`Loaded ${userCharacters.length} characters from cache`);
     } catch (error) {
         console.error('Error loading characters:', error);
         throw error;
@@ -41,6 +43,11 @@ async function loadUserCharacters() {
 async function loadProfessionMains() {
     try {
         const response = await fetch('/api/profession-mains');
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -52,10 +59,13 @@ async function loadProfessionMains() {
                 };
             });
             console.log('Loaded profession mains:', professionMains);
+        } else {
+            console.warn('Profession mains response not successful:', data);
         }
     } catch (error) {
         console.error('Error loading profession mains:', error);
         // Continue without mains - not critical
+        professionMains = {};
     }
 }
 
