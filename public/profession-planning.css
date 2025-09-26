@@ -461,6 +461,69 @@ select:focus {
     margin-top: 2px;
 }
 
+/* Character Section */
+.character-section {
+    margin-bottom: 30px;
+}
+
+.character-section h3 {
+    color: var(--text-primary);
+    margin: 0 0 15px 0;
+}
+
+.character-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.character-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.character-card:hover {
+    border-color: var(--accent-color);
+    background: #323841;
+}
+
+.character-card.selected {
+    border-color: var(--accent-color);
+    background: #3a3f4a;
+    box-shadow: 0 0 10px rgba(240, 185, 11, 0.3);
+}
+
+.character-name {
+    font-weight: bold;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.character-details {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    margin-bottom: 8px;
+}
+
+.character-profession-info {
+    font-size: 0.85em;
+    color: var(--accent-color);
+}
+
+.character-main-badge {
+    background: var(--success-color);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    margin-left: 8px;
+}
+
 /* Recipe Grid and Items */
 .recipe-grid {
     display: grid;

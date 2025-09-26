@@ -1541,13 +1541,8 @@ const dbHelpers = {
             console.log(`🗄️ Starting database upsert for realm ${connectedRealmId}: ${auctionData.length} auctions`);
             await client.query('BEGIN');
 
-            // Clear old auction data for this realm
-            console.log(`🧹 Clearing old auction data for realm ${connectedRealmId}...`);
-            const deleteResult = await client.query(
-                'DELETE FROM current_auctions WHERE connected_realm_id = $1 AND region = $2',
-                [connectedRealmId, region]
-            );
-            console.log(`✅ Deleted ${deleteResult.rowCount} old auction records`);
+            // We'll use UPSERT instead of deleting to preserve historical data
+            console.log(`📅 Using UPSERT approach to preserve historical auction data for realm ${connectedRealmId}...`);
 
             // Process auction data and insert current auctions
             console.log(`📊 Processing ${auctionData.length} auction records...`);
@@ -1602,19 +1597,26 @@ const dbHelpers = {
 
                     insertValues.push(
                         connectedRealmId, itemId, lowestPrice, avgPrice,
-                        data.totalQuantity, data.auctionCount, region
+                        data.totalQuantity, data.auctionCount, region, new Date()
                     );
 
-                    placeholders.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6})`);
-                    paramIndex += 7;
+                    placeholders.push(`($${paramIndex}, $${paramIndex+1}, $${paramIndex+2}, $${paramIndex+3}, $${paramIndex+4}, $${paramIndex+5}, $${paramIndex+6}, $${paramIndex+7})`);
+                    paramIndex += 8;
                 }
 
                 // Batch INSERT
                 if (insertValues.length > 0) {
                     await client.query(`
                         INSERT INTO current_auctions
-                        (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count, region)
+                        (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count, region, last_updated)
                         VALUES ${placeholders.join(', ')}
+                        ON CONFLICT (connected_realm_id, item_id, region)
+                        DO UPDATE SET
+                            lowest_price = EXCLUDED.lowest_price,
+                            avg_price = EXCLUDED.avg_price,
+                            total_quantity = EXCLUDED.total_quantity,
+                            auction_count = EXCLUDED.auction_count,
+                            last_updated = EXCLUDED.last_updated
                     `, insertValues);
 
                     totalInserted += batch.length;
@@ -1657,6 +1659,28 @@ const dbHelpers = {
             });
 
             return Array.from(uniquePrices.values());
+        } finally {
+            client.release();
+        }
+    },
+
+    // Get current auction price for a single item
+    getCurrentAuctionPrice: async function(itemId, connectedRealmId) {
+        const client = await pool.connect();
+        try {
+            // Get price from both realm-specific auctions and regional commodities
+            const result = await client.query(`
+                SELECT item_id, lowest_price, avg_price, total_quantity, auction_count,
+                       last_updated, connected_realm_id,
+                       CASE WHEN connected_realm_id = 0 THEN 'commodity' ELSE 'realm' END as auction_type
+                FROM current_auctions
+                WHERE (connected_realm_id = $1 OR connected_realm_id = 0)
+                AND item_id = $2
+                ORDER BY connected_realm_id DESC -- Prefer realm-specific over commodities if both exist
+                LIMIT 1
+            `, [connectedRealmId, itemId]);
+
+            return result.rows.length > 0 ? result.rows[0] : null;
         } finally {
             client.release();
         }

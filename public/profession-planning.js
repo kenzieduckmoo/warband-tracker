@@ -3,6 +3,8 @@
 let currentProfession = null;
 let userCharacters = [];
 let professionMains = {};
+let professionsData = {};
+let missingCoverageData = [];
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', async function() {
@@ -10,6 +12,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     try {
         await loadUserCharacters();
+        await loadProfessionData();
+        await loadMissingCoverageData();
         await loadProfessionMains();
         setupEventListeners();
         updateProfessionList();
@@ -35,6 +39,40 @@ async function loadUserCharacters() {
         console.log(`Loaded ${userCharacters.length} characters from cache`);
     } catch (error) {
         console.error('Error loading characters:', error);
+        throw error;
+    }
+}
+
+// Load profession data using the same endpoint as dashboard
+async function loadProfessionData() {
+    try {
+        const response = await fetch('/api/enhanced-professions-summary');
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        professionsData = await response.json();
+        console.log('Loaded professions data:', professionsData);
+    } catch (error) {
+        console.error('Error loading professions data:', error);
+        throw error;
+    }
+}
+
+// Load missing profession coverage data
+async function loadMissingCoverageData() {
+    try {
+        const response = await fetch('/api/missing-profession-coverage');
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        missingCoverageData = await response.json();
+        console.log('Loaded missing coverage data:', missingCoverageData);
+    } catch (error) {
+        console.error('Error loading missing coverage data:', error);
         throw error;
     }
 }
@@ -69,7 +107,7 @@ async function loadProfessionMains() {
     }
 }
 
-// Update the profession list display with current mains
+// Update the profession list display with current mains and character info
 function updateProfessionList() {
     const professionItems = document.querySelectorAll('.profession-item');
 
@@ -77,12 +115,23 @@ function updateProfessionList() {
         const professionName = item.dataset.profession;
         const mainElement = item.querySelector('.profession-main');
 
-        if (professionMains[professionName]) {
-            const main = professionMains[professionName];
-            mainElement.textContent = `${main.character} (${main.realm})`;
-            mainElement.classList.add('assigned');
+        // Find profession data from dashboard endpoint
+        const professionInfo = professionsData[professionName];
+
+        if (professionInfo && professionInfo.length > 0) {
+            // Show character count and main assignment
+            const totalChars = professionInfo.reduce((sum, tier) => sum + tier.totalCharacters.size, 0);
+
+            if (professionMains[professionName]) {
+                const main = professionMains[professionName];
+                mainElement.textContent = `Main: ${main.character} (${totalChars} total)`;
+                mainElement.classList.add('assigned');
+            } else {
+                mainElement.textContent = `${totalChars} character${totalChars !== 1 ? 's' : ''} - No main assigned`;
+                mainElement.classList.remove('assigned');
+            }
         } else {
-            mainElement.textContent = 'No main assigned';
+            mainElement.textContent = 'No characters with this profession';
             mainElement.classList.remove('assigned');
         }
     });
@@ -124,7 +173,7 @@ function setupEventListeners() {
 }
 
 // Select a profession and load its details
-async function selectProfession(professionName) {
+function selectProfession(professionName) {
     console.log(`Selecting profession: ${professionName}`);
 
     // Update UI state
@@ -143,38 +192,201 @@ async function selectProfession(professionName) {
 
     currentProfession = professionName;
 
-    // Load profession data
-    await loadProfessionData(professionName);
+    // Display profession data using existing dashboard data
+    displayProfessionDataFromDashboard(professionName);
 }
 
-// Load profession cost analysis data
-async function loadProfessionData(professionName) {
-    try {
-        showLoading('Loading recipe data...');
+// Display profession data using existing dashboard data
+function displayProfessionDataFromDashboard(professionName) {
+    console.log(`Loading profession data for: ${professionName}`);
 
-        const response = await fetch(`/api/profession-cost-analysis/${professionName}`);
+    // Get profession info from dashboard data
+    const professionInfo = professionsData[professionName] || [];
 
-        console.log('Response status:', response.status);
-        console.log('Response ok:', response.ok);
+    // Get missing recipes for this profession from missing coverage data
+    const missingRecipes = missingCoverageData.filter(recipe =>
+        recipe.profession_name.toLowerCase() === professionName.toLowerCase()
+    );
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Server response:', errorText);
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
+    console.log('Profession info:', professionInfo);
+    console.log('Missing recipes:', missingRecipes);
 
-        const data = await response.json();
-        console.log('Received data:', data);
+    // Calculate statistics
+    const totalCharacters = professionInfo.reduce((sum, tier) => sum + tier.totalCharacters.size, 0);
+    const totalMissingRecipes = missingRecipes.length;
 
-        if (data.success) {
-            displayProfessionData(data);
-        } else {
-            throw new Error(data.error || 'Failed to load profession data');
-        }
-    } catch (error) {
-        console.error('Error loading profession data:', error);
-        showError(`Failed to load ${professionName} data: ${error.message}`);
+    // Update stats display
+    document.getElementById('total-recipes').textContent = `${totalCharacters} characters`;
+    document.getElementById('missing-recipes').textContent = totalMissingRecipes;
+    document.getElementById('estimated-cost').textContent = 'Calculating...';
+
+    // Display character list for this profession
+    displayProfessionCharacters(professionInfo);
+
+    // Display missing recipes
+    displayMissingRecipes(missingRecipes);
+
+    // Load auction house prices for missing recipes
+    loadAuctionHousePrices(missingRecipes);
+}
+
+// Display characters for the selected profession
+function displayProfessionCharacters(professionInfo) {
+    const characterGrid = document.getElementById('character-grid');
+
+    if (!professionInfo || professionInfo.length === 0) {
+        characterGrid.innerHTML = '<div class="no-characters">No characters found with this profession.</div>';
+        return;
     }
+
+    let html = '';
+    professionInfo.forEach(tier => {
+        const characters = Array.from(tier.totalCharacters);
+        characters.forEach(characterName => {
+            const isMain = professionMains[currentProfession]?.character === characterName;
+
+            html += `
+                <div class="character-card ${isMain ? 'selected' : ''}" data-character="${characterName}">
+                    <div class="character-name">
+                        ${characterName}
+                        ${isMain ? '<span class="character-main-badge">MAIN</span>' : ''}
+                    </div>
+                    <div class="character-details">
+                        ${tier.tierName} - ${tier.characterList}
+                    </div>
+                    <div class="character-profession-info">
+                        Skill Level Information Available
+                    </div>
+                </div>
+            `;
+        });
+    });
+
+    characterGrid.innerHTML = html;
+
+    // Add click handlers for character selection
+    characterGrid.querySelectorAll('.character-card').forEach(card => {
+        card.addEventListener('click', function() {
+            const characterName = this.dataset.character;
+            selectProfessionCharacter(characterName);
+        });
+    });
+}
+
+// Display missing recipes with auction house pricing
+function displayMissingRecipes(missingRecipes) {
+    const recipeList = document.getElementById('recipe-list');
+
+    if (missingRecipes.length === 0) {
+        recipeList.innerHTML = '<div class="no-recipes">🎉 All recipes known for this profession!</div>';
+        return;
+    }
+
+    let html = '<div class="recipe-grid">';
+
+    missingRecipes.forEach(recipe => {
+        html += `
+            <div class="recipe-item" data-recipe-id="${recipe.recipe_id}">
+                <div class="recipe-header">
+                    <div class="recipe-name">${recipe.recipe_name}</div>
+                    <div class="recipe-price" id="price-${recipe.recipe_id}">Checking prices...</div>
+                </div>
+                <div class="recipe-details">
+                    <span class="auction-type">📋 Missing Recipe</span>
+                    <span class="tier-info">${recipe.tier_name}</span>
+                </div>
+                <div class="recipe-actions">
+                    <button class="btn btn-small view-wowhead" data-recipe-id="${recipe.recipe_id}">View on Wowhead</button>
+                    <button class="btn btn-small compare-prices" data-recipe-id="${recipe.recipe_id}">Compare Prices</button>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    recipeList.innerHTML = html;
+
+    // Add event listeners for recipe actions
+    recipeList.querySelectorAll('.view-wowhead').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const recipeId = this.dataset.recipeId;
+            window.open(`https://www.wowhead.com/item=${recipeId}`, '_blank');
+        });
+    });
+
+    recipeList.querySelectorAll('.compare-prices').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const recipeId = this.dataset.recipeId;
+            showCrossServerComparison(recipeId);
+        });
+    });
+}
+
+// Load auction house prices for missing recipes
+async function loadAuctionHousePrices(missingRecipes) {
+    if (missingRecipes.length === 0) return;
+
+    let totalCost = 0;
+    let pricesFound = 0;
+
+    // Load prices for each recipe
+    for (const recipe of missingRecipes) {
+        try {
+            const response = await fetch(`/api/auction-price/${recipe.recipe_id}`);
+            const priceData = await response.json();
+
+            const priceElement = document.getElementById(`price-${recipe.recipe_id}`);
+            if (priceElement) {
+                if (priceData.success && priceData.price) {
+                    const price = parseInt(priceData.price);
+                    priceElement.textContent = formatGold(price);
+                    priceElement.className = 'recipe-price';
+
+                    // Add auction type indicator
+                    const auctionTypeElement = priceElement.parentElement.parentElement.querySelector('.auction-type');
+                    if (priceData.is_commodity) {
+                        auctionTypeElement.textContent = '🌍 Commodity';
+                    } else {
+                        auctionTypeElement.textContent = '🏪 Server-specific';
+                    }
+
+                    totalCost += price;
+                    pricesFound++;
+                } else {
+                    priceElement.textContent = 'Not available';
+                    priceElement.className = 'recipe-price no-price';
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to load price for recipe ${recipe.recipe_id}:`, error);
+            const priceElement = document.getElementById(`price-${recipe.recipe_id}`);
+            if (priceElement) {
+                priceElement.textContent = 'Price unavailable';
+                priceElement.className = 'recipe-price no-price';
+            }
+        }
+    }
+
+    // Update total estimated cost
+    document.getElementById('estimated-cost').textContent = formatGold(totalCost);
+
+    if (pricesFound > 0) {
+        console.log(`Loaded prices for ${pricesFound}/${missingRecipes.length} recipes. Total cost: ${formatGold(totalCost)}`);
+    }
+}
+
+// Select a character for profession focus
+function selectProfessionCharacter(characterName) {
+    // Update visual selection
+    document.querySelectorAll('.character-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`[data-character="${characterName}"]`).classList.add('selected');
+
+    console.log(`Selected character: ${characterName} for ${currentProfession}`);
+
+    // This could trigger updates to show character-specific recipe data
+    showSuccess(`Viewing ${currentProfession} data for ${characterName}`);
 }
 
 // Display profession analysis data

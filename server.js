@@ -2459,11 +2459,68 @@ app.get('/api/profession-mains', requireAuth, async (req, res) => {
         const userId = req.session.userId;
         const professionMains = await database.getProfessionMains(userId);
 
-        res.json(professionMains);
+        res.json({
+            success: true,
+            assignments: professionMains
+        });
 
     } catch (error) {
         console.error('Get profession mains error:', error);
         res.status(500).json({ error: 'Failed to get profession mains' });
+    }
+});
+
+// Get auction house price for a specific item
+app.get('/api/auction-price/:itemId', requireAuth, async (req, res) => {
+    try {
+        const { itemId } = req.params;
+        const userId = req.session.userId;
+        const userRegion = await getUserRegionForAPI(userId);
+
+        // Get user's main realm (or first character's realm)
+        const characters = await database.getAllCharacters(userId);
+        if (characters.length === 0) {
+            return res.status(404).json({ error: 'No characters found' });
+        }
+
+        const mainCharacter = characters[0]; // Use first character for realm
+        const realmSlug = mainCharacter.realm.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/['']/g, '')
+            .replace(/[^a-z0-9-]/g, '');
+
+        let connectedRealmId;
+        try {
+            connectedRealmId = await getConnectedRealmId(realmSlug, userRegion);
+        } catch (realmError) {
+            console.error('Failed to get connected realm ID for pricing:', realmError.message);
+            return res.status(500).json({ error: 'Could not determine realm for pricing' });
+        }
+
+        // Get current auction price
+        const priceData = await database.getCurrentAuctionPrice(itemId, connectedRealmId);
+
+        if (priceData) {
+            res.json({
+                success: true,
+                item_id: itemId,
+                price: priceData.lowest_price,
+                quantity: priceData.total_quantity,
+                is_commodity: priceData.connected_realm_id === 0,
+                last_updated: priceData.last_seen,
+                realm: mainCharacter.realm
+            });
+        } else {
+            res.json({
+                success: false,
+                item_id: itemId,
+                error: 'No auction data found'
+            });
+        }
+
+    } catch (error) {
+        console.error('Get auction price error:', error);
+        res.status(500).json({ error: 'Failed to get auction price' });
     }
 });
 
