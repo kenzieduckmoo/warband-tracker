@@ -685,9 +685,9 @@ async function assignProfessionMain(profession, characterName, realm) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                profession: profession,
-                character: characterName,
-                realm: realm
+                professionName: profession,
+                characterId: `${realm.toLowerCase().replace(/\s+/g, '-').replace(/['']/g, '').replace(/[^a-z0-9-]/g, '')}-${characterName.toLowerCase()}`,
+                priority: 1
             })
         });
 
