@@ -312,17 +312,23 @@ async function updateRecipeCache() {
 // Auction House Data Collection Service
 async function updateAuctionHouseData(connectedRealmId, region = 'us') {
     try {
-        console.log(`Fetching auction house data for connected realm ${connectedRealmId}...`);
+        console.log(`📊 Fetching auction house data for connected realm ${connectedRealmId} (${region.toUpperCase()})...`);
 
         const token = await getClientCredentialsToken(region);
+        const startTime = Date.now();
+
         const response = await axios.get(
             `https://${region}.api.blizzard.com/data/wow/connected-realm/${connectedRealmId}/auctions?namespace=dynamic-${region}`,
             {
                 headers: {
                     'Authorization': `Bearer ${token}`
-                }
+                },
+                timeout: 45000 // 45 second timeout
             }
         );
+
+        const fetchTime = Date.now() - startTime;
+        console.log(`⏱️ API fetch completed in ${fetchTime}ms for realm ${connectedRealmId}`);
 
         if (response.data && response.data.auctions) {
             const result = await database.upsertAuctionData(connectedRealmId, response.data.auctions, region);
@@ -333,8 +339,19 @@ async function updateAuctionHouseData(connectedRealmId, region = 'us') {
             return null;
         }
     } catch (error) {
-        console.error(`Failed to update auction house data for realm ${connectedRealmId}:`, error.message);
-        throw error;
+        if (error.code === 'ECONNABORTED') {
+            console.error(`⏱️ Timeout: Auction house API took longer than 45 seconds for realm ${connectedRealmId}`);
+            throw new Error(`Auction house API timeout (45s) for realm ${connectedRealmId}`);
+        } else if (error.response?.status === 503) {
+            console.error(`🚫 Service unavailable: Auction house API is down for realm ${connectedRealmId}`);
+            throw new Error(`Auction house API unavailable for realm ${connectedRealmId}`);
+        } else if (error.response?.status === 429) {
+            console.error(`⏸️ Rate limited: Too many requests to auction house API for realm ${connectedRealmId}`);
+            throw new Error(`Rate limited by auction house API for realm ${connectedRealmId}`);
+        } else {
+            console.error(`❌ Failed to update auction house data for realm ${connectedRealmId}:`, error.message);
+            throw error;
+        }
     }
 }
 
