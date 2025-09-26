@@ -309,6 +309,73 @@ async function updateRecipeCache() {
     }
 }
 
+// Auction House Data Collection Service
+async function updateAuctionHouseData(connectedRealmId, region = 'us') {
+    try {
+        console.log(`Fetching auction house data for connected realm ${connectedRealmId}...`);
+
+        const token = await getClientCredentialsToken(region);
+        const response = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/connected-realm/${connectedRealmId}/auctions?namespace=dynamic-${region}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            }
+        );
+
+        if (response.data && response.data.auctions) {
+            const result = await database.upsertAuctionData(connectedRealmId, response.data.auctions);
+            console.log(`✅ Updated auction data for realm ${connectedRealmId}: ${result.itemsProcessed} items, ${result.auctionsProcessed} auctions`);
+            return result;
+        } else {
+            console.log(`⚠️ No auction data returned for realm ${connectedRealmId}`);
+            return null;
+        }
+    } catch (error) {
+        console.error(`Failed to update auction house data for realm ${connectedRealmId}:`, error.message);
+        throw error;
+    }
+}
+
+// Get connected realm ID for a character's realm
+async function getConnectedRealmId(realmSlug, region = 'us') {
+    try {
+        const token = await getClientCredentialsToken(region);
+
+        // First get realm info
+        const realmResponse = await axios.get(
+            `https://${region}.api.blizzard.com/data/wow/realm/${realmSlug}?namespace=dynamic-${region}`,
+            {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            }
+        );
+
+        if (realmResponse.data && realmResponse.data.connected_realm) {
+            // Extract connected realm ID from URL
+            const connectedRealmUrl = realmResponse.data.connected_realm.href;
+            const match = connectedRealmUrl.match(/connected-realm\/(\d+)/);
+            if (match) {
+                return parseInt(match[1]);
+            }
+        }
+
+        throw new Error(`Could not find connected realm ID for ${realmSlug}`);
+    } catch (error) {
+        console.error(`Failed to get connected realm ID for ${realmSlug}:`, error.message);
+        throw error;
+    }
+}
+
+// Background auction house update service
+async function startAuctionHouseService() {
+    // This will be triggered based on user characters' realms
+    // For now, we'll implement on-demand updating when users request profession data
+    console.log('🏪 Auction House service initialized (on-demand mode)');
+}
+
 // Client credentials token for public endpoints like WoW Token
 let clientCredentialsToken = null;
 let clientCredentialsExpiry = 0;
@@ -2140,6 +2207,125 @@ app.post('/api/cache-recipes', async (req, res) => {
     } catch (error) {
         console.error('Recipe caching error:', error.response?.data || error.message);
         res.status(500).json({ error: 'Failed to cache recipes' });
+    }
+});
+
+// Auction House and Profession Planning Endpoints
+
+// Get recipe cost analysis for a profession
+app.get('/api/profession-cost-analysis/:professionName', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const professionName = req.params.professionName;
+        const userRegion = await getUserRegionForAPI(userId);
+
+        // Get user's main character for this profession (or first character with this profession)
+        const characters = await database.getAllCharacters(userId);
+        const professionCharacter = characters.find(char =>
+            char.professions && char.professions.some(prof => prof.name === professionName)
+        );
+
+        if (!professionCharacter) {
+            return res.status(404).json({ error: 'No character found with this profession' });
+        }
+
+        // Get connected realm ID
+        const realmSlug = professionCharacter.realm.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/['']/g, '')
+            .replace(/[^a-z0-9-]/g, '');
+
+        let connectedRealmId;
+        try {
+            connectedRealmId = await getConnectedRealmId(realmSlug, userRegion);
+        } catch (realmError) {
+            console.error('Failed to get connected realm ID:', realmError.message);
+            return res.status(500).json({ error: 'Could not determine realm auction house' });
+        }
+
+        // Update auction house data (on-demand for now)
+        try {
+            await updateAuctionHouseData(connectedRealmId, userRegion);
+        } catch (auctionError) {
+            console.error('Failed to update auction house data:', auctionError.message);
+            // Continue anyway with existing data
+        }
+
+        // Get recipe cost analysis
+        const costAnalysis = await database.getRecipeCostAnalysis(userId, connectedRealmId, professionName);
+
+        // Calculate totals
+        let totalCost = 0;
+        let availableRecipes = 0;
+        let missingFromAH = 0;
+
+        costAnalysis.forEach(recipe => {
+            if (recipe.lowest_price) {
+                totalCost += parseInt(recipe.lowest_price);
+                availableRecipes++;
+            } else {
+                missingFromAH++;
+            }
+        });
+
+        res.json({
+            profession: professionName,
+            character: {
+                name: professionCharacter.name,
+                realm: professionCharacter.realm
+            },
+            connected_realm_id: connectedRealmId,
+            summary: {
+                total_missing_recipes: costAnalysis.length,
+                available_on_ah: availableRecipes,
+                missing_from_ah: missingFromAH,
+                total_cost_copper: totalCost,
+                total_cost_gold: Math.floor(totalCost / 10000),
+                avg_price_per_recipe: availableRecipes > 0 ? Math.round(totalCost / availableRecipes) : 0
+            },
+            recipes: costAnalysis
+        });
+
+    } catch (error) {
+        console.error('Recipe cost analysis error:', error);
+        res.status(500).json({ error: 'Failed to analyze recipe costs' });
+    }
+});
+
+// Set profession main character
+app.post('/api/profession-main', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const { professionName, characterId, priority = 1 } = req.body;
+
+        if (!professionName || !characterId) {
+            return res.status(400).json({ error: 'Profession name and character ID are required' });
+        }
+
+        await database.setProfessionMain(userId, professionName, characterId, priority);
+
+        res.json({
+            success: true,
+            message: `Set ${characterId} as priority ${priority} for ${professionName}`
+        });
+
+    } catch (error) {
+        console.error('Set profession main error:', error);
+        res.status(500).json({ error: 'Failed to set profession main' });
+    }
+});
+
+// Get profession mains
+app.get('/api/profession-mains', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const professionMains = await database.getProfessionMains(userId);
+
+        res.json(professionMains);
+
+    } catch (error) {
+        console.error('Get profession mains error:', error);
+        res.status(500).json({ error: 'Failed to get profession mains' });
     }
 });
 

@@ -316,6 +316,69 @@ async function initDatabase() {
             }
         }
 
+        // Auction House Integration Tables
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS auction_prices (
+                id SERIAL PRIMARY KEY,
+                connected_realm_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                price BIGINT NOT NULL,
+                quantity INTEGER NOT NULL,
+                time_left VARCHAR(20),
+                snapshot_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_auction_prices_realm_item_time
+            ON auction_prices(connected_realm_id, item_id, snapshot_time)
+        `);
+
+        await client.query(`
+            CREATE INDEX IF NOT EXISTS idx_auction_prices_item_time
+            ON auction_prices(item_id, snapshot_time)
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS current_auctions (
+                connected_realm_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                lowest_price BIGINT NOT NULL,
+                avg_price BIGINT,
+                total_quantity INTEGER,
+                auction_count INTEGER,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(connected_realm_id, item_id)
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS profession_mains (
+                user_id TEXT NOT NULL,
+                profession_name VARCHAR(50) NOT NULL,
+                character_id TEXT NOT NULL,
+                priority INTEGER DEFAULT 1,
+                assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(user_id, profession_name, priority),
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (character_id) REFERENCES characters(id)
+            )
+        `);
+
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS price_alerts (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                target_price BIGINT NOT NULL,
+                connected_realm_id INTEGER NOT NULL,
+                is_active BOOLEAN DEFAULT true,
+                created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                triggered_date TIMESTAMP NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        `);
+
         await client.query('COMMIT');
         console.log('📊 PostgreSQL database initialized successfully');
     } catch (error) {
@@ -1391,6 +1454,165 @@ const dbHelpers = {
 
             console.log(`✅ Updated ${updated} zone names from JSON to English text`);
             return { processed: jsonRecords.rows.length, updated };
+        } finally {
+            client.release();
+        }
+    },
+
+    // Auction House Functions
+    upsertAuctionData: async function(connectedRealmId, auctionData) {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Clear old auction data for this realm
+            await client.query(
+                'DELETE FROM current_auctions WHERE connected_realm_id = $1',
+                [connectedRealmId]
+            );
+
+            // Process auction data and insert current auctions
+            const itemPrices = new Map();
+
+            for (const auction of auctionData) {
+                const itemId = auction.item.id;
+                const price = auction.buyout || auction.bid || 0;
+                const quantity = auction.quantity || 1;
+
+                if (price === 0) continue; // Skip auctions without prices
+
+                if (!itemPrices.has(itemId)) {
+                    itemPrices.set(itemId, {
+                        prices: [],
+                        totalQuantity: 0,
+                        auctionCount: 0
+                    });
+                }
+
+                const itemData = itemPrices.get(itemId);
+                itemData.prices.push(price);
+                itemData.totalQuantity += quantity;
+                itemData.auctionCount += 1;
+
+                // Insert into price history
+                await client.query(`
+                    INSERT INTO auction_prices (connected_realm_id, item_id, price, quantity, time_left)
+                    VALUES ($1, $2, $3, $4, $5)
+                `, [connectedRealmId, itemId, price, quantity, auction.time_left]);
+            }
+
+            // Insert current auction summaries
+            for (const [itemId, data] of itemPrices) {
+                const lowestPrice = Math.min(...data.prices);
+                const avgPrice = Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length);
+
+                await client.query(`
+                    INSERT INTO current_auctions
+                    (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                `, [connectedRealmId, itemId, lowestPrice, avgPrice, data.totalQuantity, data.auctionCount]);
+            }
+
+            await client.query('COMMIT');
+            return { itemsProcessed: itemPrices.size, auctionsProcessed: auctionData.length };
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    },
+
+    getCurrentAuctionPrices: async function(connectedRealmId, itemIds) {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(`
+                SELECT item_id, lowest_price, avg_price, total_quantity, auction_count, last_updated
+                FROM current_auctions
+                WHERE connected_realm_id = $1 AND item_id = ANY($2)
+            `, [connectedRealmId, itemIds]);
+
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
+    getRecipeCostAnalysis: async function(userId, connectedRealmId, professionName) {
+        const client = await pool.connect();
+        try {
+            // Get missing recipes for the user
+            const result = await client.query(`
+                WITH missing_recipes AS (
+                    SELECT DISTINCT cr.recipe_id, cr.recipe_name
+                    FROM cached_recipes cr
+                    WHERE cr.profession_name = $1
+                    AND NOT EXISTS (
+                        SELECT 1 FROM character_known_recipes ckr
+                        WHERE ckr.user_id = $2 AND ckr.recipe_id = cr.recipe_id
+                    )
+                )
+                SELECT
+                    mr.recipe_id,
+                    mr.recipe_name,
+                    ca.lowest_price,
+                    ca.avg_price,
+                    ca.total_quantity,
+                    ca.auction_count,
+                    ca.last_updated
+                FROM missing_recipes mr
+                LEFT JOIN current_auctions ca ON mr.recipe_id = ca.item_id AND ca.connected_realm_id = $3
+                ORDER BY ca.lowest_price ASC NULLS LAST
+            `, [professionName, userId, connectedRealmId]);
+
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
+    setProfessionMain: async function(userId, professionName, characterId, priority = 1) {
+        const client = await pool.connect();
+        try {
+            await client.query(`
+                INSERT INTO profession_mains (user_id, profession_name, character_id, priority)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (user_id, profession_name, priority)
+                DO UPDATE SET character_id = $3, assigned_date = CURRENT_TIMESTAMP
+            `, [userId, professionName, characterId, priority]);
+        } finally {
+            client.release();
+        }
+    },
+
+    getProfessionMains: async function(userId) {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(`
+                SELECT pm.profession_name, pm.character_id, pm.priority, pm.assigned_date,
+                       c.name as character_name, c.realm, c.level
+                FROM profession_mains pm
+                JOIN characters c ON pm.character_id = c.id
+                WHERE pm.user_id = $1
+                ORDER BY pm.profession_name, pm.priority
+            `, [userId]);
+
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
+    createPriceAlert: async function(userId, itemId, targetPrice, connectedRealmId) {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(`
+                INSERT INTO price_alerts (user_id, item_id, target_price, connected_realm_id)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            `, [userId, itemId, targetPrice, connectedRealmId]);
+
+            return result.rows[0].id;
         } finally {
             client.release();
         }

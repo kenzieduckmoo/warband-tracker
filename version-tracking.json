@@ -1,7 +1,15 @@
 {
-  "currentVersion": "0.3.3",
+  "currentVersion": "0.3.4",
   "currentVersionDate": "2025-09-26",
   "unreleased": [
+    "Fixed foreign key constraint errors for new character recipe data",
+    "Fixed [object Object] logging errors in recipe caching system",
+    "Added level filter memory using localStorage (remembers 80s/70-80/10-80 selection)",
+    "Added quest details modal - click incomplete quest counts to see specific missing quests",
+    "Added Wowhead links for individual quests in quest details modal",
+    "Moved quest cache and recipe cache buttons to admin panel only",
+    "Started implementation of auction house API integration for profession planning",
+    "Added database schema for auction house pricing data and profession planning"
   ],
   "releases": {
     "0.3.3": {
