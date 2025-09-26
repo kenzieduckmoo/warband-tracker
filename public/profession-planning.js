@@ -201,10 +201,18 @@ function displayProfessionDataFromDashboard(professionName) {
     console.log(`Loading profession data for: ${professionName}`);
 
     // Get profession info from dashboard data
-    // The professionsData is an array, need to find profession by name
-    const professionInfo = Object.values(professionsData).flat().filter(prof =>
-        prof.name && prof.name.toLowerCase() === professionName.toLowerCase()
-    ) || [];
+    // professionsData contains tier info, but not character info
+    // We need to get character info from the characters list
+    const professionTiers = professionsData.filter(tier =>
+        tier.profession_name && tier.profession_name.toLowerCase() === professionName.toLowerCase()
+    );
+
+    // Find characters with this profession from the character list
+    const charactersWithProfession = userCharacters.filter(character => {
+        if (!character.professions_list) return false;
+        const charProfessions = character.professions_list.split(', ').map(p => p.trim().toLowerCase());
+        return charProfessions.includes(professionName.toLowerCase());
+    });
 
     // Get missing recipes for this profession from missing coverage data
     const missingTiers = missingCoverageData.filter(tier =>
@@ -232,17 +240,12 @@ function displayProfessionDataFromDashboard(professionName) {
         }
     });
 
-    console.log('Profession info:', professionInfo);
+    console.log('Profession tiers:', professionTiers);
+    console.log('Characters with profession:', charactersWithProfession);
     console.log('Missing recipes:', missingRecipes);
 
     // Calculate statistics
-    const totalCharacters = professionInfo.reduce((sum, tier) => {
-        if (tier.totalCharacters) {
-            // Handle if totalCharacters is a Set or number
-            return sum + (typeof tier.totalCharacters.size === 'number' ? tier.totalCharacters.size : tier.totalCharacters);
-        }
-        return sum;
-    }, 0);
+    const totalCharacters = charactersWithProfession.length;
     const totalMissingRecipes = missingRecipes.length;
 
     // Update stats display
@@ -251,7 +254,7 @@ function displayProfessionDataFromDashboard(professionName) {
     document.getElementById('estimated-cost').textContent = 'Calculating...';
 
     // Display character list for this profession
-    displayProfessionCharacters(professionInfo);
+    displayProfessionCharacters(charactersWithProfession);
 
     // Display missing recipes
     displayMissingRecipes(missingRecipes);
@@ -261,35 +264,32 @@ function displayProfessionDataFromDashboard(professionName) {
 }
 
 // Display characters for the selected profession
-function displayProfessionCharacters(professionInfo) {
+function displayProfessionCharacters(charactersWithProfession) {
     const characterGrid = document.getElementById('character-grid');
 
-    if (!professionInfo || professionInfo.length === 0) {
+    if (!charactersWithProfession || charactersWithProfession.length === 0) {
         characterGrid.innerHTML = '<div class="no-characters">No characters found with this profession.</div>';
         return;
     }
 
     let html = '';
-    professionInfo.forEach(tier => {
-        const characters = Array.from(tier.totalCharacters);
-        characters.forEach(characterName => {
-            const isMain = professionMains[currentProfession]?.character === characterName;
+    charactersWithProfession.forEach(character => {
+        const isMain = professionMains[currentProfession]?.character === character.name;
 
-            html += `
-                <div class="character-card ${isMain ? 'selected' : ''}" data-character="${characterName}">
-                    <div class="character-name">
-                        ${characterName}
-                        ${isMain ? '<span class="character-main-badge">MAIN</span>' : ''}
-                    </div>
-                    <div class="character-details">
-                        ${tier.tierName} - ${tier.characterList}
-                    </div>
-                    <div class="character-profession-info">
-                        Skill Level Information Available
-                    </div>
+        html += `
+            <div class="character-card ${isMain ? 'selected' : ''}" data-character="${character.name}">
+                <div class="character-name">
+                    ${character.name}
+                    ${isMain ? '<span class="character-main-badge">MAIN</span>' : ''}
                 </div>
-            `;
-        });
+                <div class="character-details">
+                    Level ${character.level} ${character.class} - ${character.realm}
+                </div>
+                <div class="character-profession-info">
+                    Item Level: ${character.average_item_level || 'N/A'}
+                </div>
+            </div>
+        `;
     });
 
     characterGrid.innerHTML = html;
@@ -378,6 +378,14 @@ async function loadAuctionHousePrices(missingRecipes) {
         return;
     }
 
+    // Handle large lists by chunking if necessary
+    const maxChunkSize = 1000;
+    if (validRecipeIds.length > maxChunkSize) {
+        console.log(`Large recipe list (${validRecipeIds.length}), processing in chunks...`);
+        await loadAuctionHousePricesInChunks(missingRecipes, validRecipeIds, maxChunkSize);
+        return;
+    }
+
     try {
         // Make a single bulk API call instead of individual calls
         const response = await fetch('/api/auction-prices-bulk', {
@@ -443,6 +451,72 @@ async function loadAuctionHousePrices(missingRecipes) {
             }
         });
     }
+}
+
+// Load auction house prices in chunks for large lists
+async function loadAuctionHousePricesInChunks(missingRecipes, validRecipeIds, chunkSize) {
+    let totalCost = 0;
+    let pricesFound = 0;
+    let totalChunks = Math.ceil(validRecipeIds.length / chunkSize);
+
+    for (let i = 0; i < validRecipeIds.length; i += chunkSize) {
+        const chunk = validRecipeIds.slice(i, i + chunkSize);
+        const chunkNumber = Math.floor(i / chunkSize) + 1;
+
+        console.log(`Loading chunk ${chunkNumber}/${totalChunks} (${chunk.length} items)...`);
+
+        try {
+            const response = await fetch('/api/auction-prices-bulk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ itemIds: chunk })
+            });
+
+            const bulkPriceData = await response.json();
+
+            if (bulkPriceData.success) {
+                // Update UI with this chunk's pricing data
+                missingRecipes.forEach(recipe => {
+                    if (!chunk.includes(recipe.recipe_id)) return;
+
+                    const priceElement = document.getElementById(`price-${recipe.recipe_id}`);
+                    if (!priceElement) return;
+
+                    const priceData = bulkPriceData.prices[recipe.recipe_id];
+
+                    if (priceData && priceData.lowest_price) {
+                        const price = parseInt(priceData.lowest_price);
+                        priceElement.textContent = formatGold(price);
+                        priceElement.className = 'recipe-price';
+
+                        // Add auction type indicator
+                        const auctionTypeElement = priceElement.parentElement.parentElement.querySelector('.auction-type');
+                        if (priceData.is_commodity) {
+                            auctionTypeElement.textContent = '🌍 Commodity';
+                        } else {
+                            auctionTypeElement.textContent = '🏪 Server-specific';
+                        }
+
+                        totalCost += price;
+                        pricesFound++;
+                    } else {
+                        priceElement.textContent = 'Not available';
+                        priceElement.className = 'recipe-price no-price';
+                    }
+                });
+
+                console.log(`Chunk ${chunkNumber} complete: found ${Object.keys(bulkPriceData.prices || {}).length} prices`);
+            }
+        } catch (error) {
+            console.error(`Failed to load chunk ${chunkNumber}:`, error);
+        }
+    }
+
+    // Update final total
+    document.getElementById('estimated-cost').textContent = formatGold(totalCost);
+    console.log(`All chunks complete: ${pricesFound}/${missingRecipes.length} recipes priced. Total cost: ${formatGold(totalCost)}`);
 }
 
 // Select a character for profession focus
