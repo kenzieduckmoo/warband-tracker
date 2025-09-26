@@ -7,7 +7,7 @@ let notesData = {};
 let tokenData = null;
 let missingCoverageData = [];
 let questZonesData = [];
-let currentFilter = '80s'; // Default filter
+let currentFilter = localStorage.getItem('dashboardLevelFilter') || '80s'; // Load saved filter or default
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', async () => {
@@ -622,7 +622,10 @@ window.toggleCoverageItem = function(itemId) {
 // Level filtering functions
 function applyLevelFilter(filter) {
     currentFilter = filter;
-    
+
+    // Save filter preference to localStorage
+    localStorage.setItem('dashboardLevelFilter', filter);
+
     switch (filter) {
         case '80s':
             charactersData = allCharactersData.filter(char => char.level === 80);
@@ -665,14 +668,23 @@ function updateFilterDescription(filter) {
 }
 
 function setupFilterButtons() {
+    // First, set the correct active button based on current filter
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-filter') === currentFilter) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Add click event listeners
     document.querySelectorAll('.filter-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             // Remove active class from all buttons
             document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            
+
             // Add active class to clicked button
             this.classList.add('active');
-            
+
             // Apply the filter
             const filter = this.getAttribute('data-filter');
             applyLevelFilter(filter);

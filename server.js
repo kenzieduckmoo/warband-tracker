@@ -1288,6 +1288,27 @@ async function refreshUserCharacterData(userId, accessToken, userRegion, forceQu
                         console.error(`Failed to get titles for ${char.name}:`, titleErr.message);
                     }
 
+                    // Create basic character data first (without professions)
+                    const characterData = {
+                        id: generateCharacterId(extractEnglishText(char.realm), char.name),
+                        name: char.name,
+                        realm: extractEnglishText(charDetails.data.realm),
+                        level: charDetails.data.level,
+                        class: extractEnglishText(charDetails.data.character_class),
+                        race: extractEnglishText(charDetails.data.race),
+                        faction: extractEnglishText(charDetails.data.faction),
+                        averageItemLevel: charDetails.data.average_item_level,
+                        equippedItemLevel: charDetails.data.equipped_item_level,
+                        title: titleData,
+                        guild: charDetails.data.guild ? extractEnglishText(charDetails.data.guild) : null,
+                        activeSpec: charDetails.data.active_spec ? extractEnglishText(charDetails.data.active_spec) : null,
+                        covenant: charDetails.data.covenant_progress ? extractEnglishText(charDetails.data.covenant_progress.chosen_covenant) : null,
+                        professions: [] // Will be populated below
+                    };
+
+                    // Save character to database FIRST so it exists for foreign key references
+                    await database.upsertCharacter(userId, characterData);
+
                     // Get professions
                     let professions = [];
                     try {
@@ -1350,24 +1371,10 @@ async function refreshUserCharacterData(userId, accessToken, userRegion, forceQu
                         console.error(`Failed to get professions for ${char.name}:`, profErr.message);
                     }
 
-                    const characterData = {
-                        id: generateCharacterId(extractEnglishText(char.realm), char.name),
-                        name: char.name,
-                        realm: extractEnglishText(charDetails.data.realm),
-                        level: charDetails.data.level,
-                        class: extractEnglishText(charDetails.data.character_class),
-                        race: extractEnglishText(charDetails.data.race),
-                        faction: extractEnglishText(charDetails.data.faction),
-                        averageItemLevel: charDetails.data.average_item_level,
-                        equippedItemLevel: charDetails.data.equipped_item_level,
-                        title: titleData,
-                        guild: charDetails.data.guild ? extractEnglishText(charDetails.data.guild) : null,
-                        activeSpec: charDetails.data.active_spec ? extractEnglishText(charDetails.data.active_spec) : null,
-                        covenant: charDetails.data.covenant_progress ? extractEnglishText(charDetails.data.covenant_progress.chosen_covenant) : null,
-                        professions: professions
-                    };
+                    // Update character data with professions
+                    characterData.professions = professions;
 
-                    // Save to database for this user
+                    // Update character in database with profession data
                     await database.upsertCharacter(userId, characterData);
                     characters.push(characterData);
                 } catch (err) {
