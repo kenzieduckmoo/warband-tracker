@@ -421,6 +421,42 @@ async function aggregatePriceHistory() {
     }
 }
 
+async function updateConnectedRealmsUS() {
+    clearResults();
+    try {
+        showMessage('Updating US connected realms mapping... This may take several minutes.', 'info');
+        const response = await fetch('/api/admin/update-connected-realms/us', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage(`US connected realms updated! Processed ${data.realmGroupsUpdated} realm groups.`, 'success');
+            showCodeBlock('US Realm Update Results', JSON.stringify(data, null, 2));
+        } else {
+            showMessage('Failed to update US connected realms: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to update US connected realms: ' + error.message, 'error');
+    }
+}
+
+async function updateConnectedRealmsEU() {
+    clearResults();
+    try {
+        showMessage('Updating EU connected realms mapping... This may take several minutes.', 'info');
+        const response = await fetch('/api/admin/update-connected-realms/eu', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage(`EU connected realms updated! Processed ${data.realmGroupsUpdated} realm groups.`, 'success');
+            showCodeBlock('EU Realm Update Results', JSON.stringify(data, null, 2));
+        } else {
+            showMessage('Failed to update EU connected realms: ' + data.error, 'error');
+        }
+    } catch (error) {
+        showMessage('Failed to update EU connected realms: ' + error.message, 'error');
+    }
+}
+
 async function checkApiStatus() {
     clearResults();
     try {
@@ -480,6 +516,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cleanup-auctions-btn')?.addEventListener('click', cleanupAuctionData);
     document.getElementById('profession-mains-btn')?.addEventListener('click', viewProfessionMains);
     document.getElementById('aggregate-price-history-btn')?.addEventListener('click', aggregatePriceHistory);
+    document.getElementById('update-connected-realms-us-btn')?.addEventListener('click', updateConnectedRealmsUS);
+    document.getElementById('update-connected-realms-eu-btn')?.addEventListener('click', updateConnectedRealmsEU);
 
     document.getElementById('view-logs-btn')?.addEventListener('click', viewLogs);
     document.getElementById('api-status-btn')?.addEventListener('click', checkApiStatus);

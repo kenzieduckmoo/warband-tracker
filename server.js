@@ -341,30 +341,82 @@ async function updateAuctionHouseData(connectedRealmId, region = 'us') {
 // Get connected realm ID for a character's realm
 async function getConnectedRealmId(realmSlug, region = 'us') {
     try {
+        // First check our local database cache
+        const cachedId = await database.findConnectedRealmId(realmSlug, region);
+        if (cachedId) {
+            console.log(`✅ Found cached connected realm ID ${cachedId} for ${realmSlug} (${region})`);
+            return cachedId;
+        }
+
+        // Convert realm name to proper slug format
+        const properSlug = realmSlug.toLowerCase()
+            .replace(/'/g, '')
+            .replace(/[\s-]+/g, '-')
+            .replace(/[^a-z0-9-]/g, '');
+
         const token = await getClientCredentialsToken(region);
 
-        // First get realm info
-        const realmResponse = await axios.get(
-            `https://${region}.api.blizzard.com/data/wow/realm/${realmSlug}?namespace=dynamic-${region}`,
-            {
-                headers: {
-                    'Authorization': `Bearer ${token}`
+        // Try the converted slug first
+        let realmResponse;
+        try {
+            realmResponse = await axios.get(
+                `https://${region}.api.blizzard.com/data/wow/realm/${properSlug}?namespace=dynamic-${region}`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 }
+            );
+        } catch (error) {
+            if (error.response?.status === 404) {
+                // If that fails, try the original slug
+                console.log(`⚠️ Realm slug '${properSlug}' not found, trying original '${realmSlug}'`);
+                realmResponse = await axios.get(
+                    `https://${region}.api.blizzard.com/data/wow/realm/${realmSlug}?namespace=dynamic-${region}`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    }
+                );
+            } else {
+                throw error;
             }
-        );
+        }
 
         if (realmResponse.data && realmResponse.data.connected_realm) {
             // Extract connected realm ID from URL
             const connectedRealmUrl = realmResponse.data.connected_realm.href;
             const match = connectedRealmUrl.match(/connected-realm\/(\d+)/);
             if (match) {
-                return parseInt(match[1]);
+                const connectedRealmId = parseInt(match[1]);
+
+                // Cache this result for future use
+                try {
+                    await database.updateConnectedRealmMapping(connectedRealmId, {
+                        realms: [{
+                            slug: realmSlug,
+                            name: realmResponse.data.name || realmSlug
+                        }]
+                    }, region);
+                } catch (cacheError) {
+                    console.warn(`⚠️ Failed to cache realm mapping: ${cacheError.message}`);
+                }
+
+                console.log(`✅ Found connected realm ID ${connectedRealmId} for ${realmSlug} (${region})`);
+                return connectedRealmId;
             }
         }
 
         throw new Error(`Could not find connected realm ID for ${realmSlug}`);
     } catch (error) {
-        console.error(`Failed to get connected realm ID for ${realmSlug}:`, error.message);
+        console.error(`❌ Failed to get connected realm ID for ${realmSlug} (${region}):`, error.message);
+
+        // Provide helpful suggestions for common issues
+        if (error.response?.status === 404) {
+            console.error(`💡 Suggestion: Realm '${realmSlug}' not found. Check if realm name is correct or run 'Update Connected Realms' in admin panel.`);
+        }
+
         throw error;
     }
 }
