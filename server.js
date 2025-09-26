@@ -168,6 +168,8 @@ app.use('/dashboard.js', express.static(path.join(__dirname, 'public', 'dashboar
 app.use('/footer.js', express.static(path.join(__dirname, 'public', 'footer.js')));
 app.use('/changelog.js', express.static(path.join(__dirname, 'public', 'changelog.js')));
 app.use('/admin.js', express.static(path.join(__dirname, 'public', 'admin.js')));
+app.use('/profession-planning.css', express.static(path.join(__dirname, 'public', 'profession-planning.css')));
+app.use('/profession-planning.js', express.static(path.join(__dirname, 'public', 'profession-planning.js')));
 
 // Session configuration with PostgreSQL store
  app.use(session({
@@ -1385,6 +1387,11 @@ app.get('/admin', (req, res) => {
 // Features page route
 app.get('/features', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'features.html'));
+});
+
+// Profession Planning page route
+app.get('/profession-planning', requireAuthRedirect, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'profession-planning.html'));
 });
 
 app.get('/characters', requireAuthRedirect, (req, res) => {

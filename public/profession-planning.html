@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profession Planning - Warband Tracker</title>
+    <link rel="stylesheet" href="profession-planning.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation Header -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <a href="/" class="nav-link">← Back to Dashboard</a>
+                <h1 class="page-title">🔨 Profession Planning</h1>
+            </div>
+            <div class="nav-right">
+                <button class="btn btn-secondary" id="refresh-data-btn">🔄 Refresh Auction Data</button>
+            </div>
+        </nav>
+
+        <div class="main-content">
+            <!-- Profession Sidebar -->
+            <aside class="profession-sidebar">
+                <h2>📋 Your Professions</h2>
+                <div class="profession-list" id="profession-list">
+                    <div class="profession-item" data-profession="alchemy">
+                        <div class="profession-icon">⚗️</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Alchemy</div>
+                            <div class="profession-main" id="alchemy-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="alchemy">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="blacksmithing">
+                        <div class="profession-icon">🔨</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Blacksmithing</div>
+                            <div class="profession-main" id="blacksmithing-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="blacksmithing">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="enchanting">
+                        <div class="profession-icon">✨</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Enchanting</div>
+                            <div class="profession-main" id="enchanting-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="enchanting">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="engineering">
+                        <div class="profession-icon">⚙️</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Engineering</div>
+                            <div class="profession-main" id="engineering-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="engineering">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="herbalism">
+                        <div class="profession-icon">🌿</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Herbalism</div>
+                            <div class="profession-main" id="herbalism-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="herbalism">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="inscription">
+                        <div class="profession-icon">📜</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Inscription</div>
+                            <div class="profession-main" id="inscription-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="inscription">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="jewelcrafting">
+                        <div class="profession-icon">💎</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Jewelcrafting</div>
+                            <div class="profession-main" id="jewelcrafting-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="jewelcrafting">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="leatherworking">
+                        <div class="profession-icon">🪡</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Leatherworking</div>
+                            <div class="profession-main" id="leatherworking-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="leatherworking">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="mining">
+                        <div class="profession-icon">⛏️</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Mining</div>
+                            <div class="profession-main" id="mining-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="mining">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="skinning">
+                        <div class="profession-icon">🔪</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Skinning</div>
+                            <div class="profession-main" id="skinning-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="skinning">Assign</button>
+                    </div>
+
+                    <div class="profession-item" data-profession="tailoring">
+                        <div class="profession-icon">🪡</div>
+                        <div class="profession-info">
+                            <div class="profession-name">Tailoring</div>
+                            <div class="profession-main" id="tailoring-main">No main assigned</div>
+                        </div>
+                        <button class="assign-btn" data-profession="tailoring">Assign</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="planning-main">
+                <div class="welcome-section" id="welcome-section">
+                    <div class="welcome-content">
+                        <h2>Welcome to Profession Planning</h2>
+                        <p>Select a profession from the sidebar to view missing recipes, cost analysis, and shopping recommendations with real-time auction house pricing.</p>
+
+                        <div class="quick-actions">
+                            <h3>Quick Actions</h3>
+                            <div class="action-buttons">
+                                <button class="btn btn-primary" id="assign-all-mains-btn">📋 Assign All Profession Mains</button>
+                                <button class="btn btn-secondary" id="view-summary-btn">📊 View Cost Summary</button>
+                            </div>
+                        </div>
+
+                        <div class="features-preview">
+                            <h3>Features Available</h3>
+                            <ul>
+                                <li>🏪 Real-time auction house pricing (server-specific + commodities)</li>
+                                <li>💰 Complete recipe cost analysis with shopping lists</li>
+                                <li>🌍 Cross-server price comparison for best deals</li>
+                                <li>👥 Profession main assignment for warband coordination</li>
+                                <li>📈 Material cost tracking and optimization</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profession Details Section (Hidden by default) -->
+                <div class="profession-details" id="profession-details" style="display: none;">
+                    <div class="profession-header">
+                        <h2 id="selected-profession-title">Alchemy Planning</h2>
+                        <div class="profession-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Total Recipes:</span>
+                                <span class="stat-value" id="total-recipes">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Missing Recipes:</span>
+                                <span class="stat-value" id="missing-recipes">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Estimated Cost:</span>
+                                <span class="stat-value" id="estimated-cost">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recipe Cost Analysis -->
+                    <div class="recipe-section">
+                        <h3>📝 Missing Recipes & Costs</h3>
+                        <div class="recipe-filters">
+                            <select id="sort-filter">
+                                <option value="cost-desc">Most Expensive First</option>
+                                <option value="cost-asc">Least Expensive First</option>
+                                <option value="name-asc">Name A-Z</option>
+                            </select>
+                            <button class="btn btn-small" id="export-shopping-list">📋 Export Shopping List</button>
+                        </div>
+
+                        <div class="recipe-list" id="recipe-list">
+                            <div class="loading-message">
+                                Loading recipe data...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cross-Server Comparison -->
+                    <div class="comparison-section">
+                        <h3>🌍 Cross-Server Price Comparison</h3>
+                        <div class="comparison-content" id="comparison-content">
+                            <p>Select recipes above to see cross-server pricing...</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Character Selection Modal -->
+    <div class="modal-overlay" id="character-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Assign Profession Main</h3>
+                <button class="modal-close" id="close-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <p>Select a character to be the main for <span id="modal-profession-name"></span>:</p>
+                <div class="character-list" id="character-list">
+                    <!-- Characters will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="profession-planning.js"></script>
+</body>
+</html>
