@@ -2022,6 +2022,31 @@ app.get('/api/incomplete-quests-by-zone', requireAuth, async (req, res) => {
     }
 });
 
+// Get detailed list of incomplete quests for a specific zone
+app.get('/api/incomplete-quests-detail/:zoneName', requireAuth, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const zoneName = decodeURIComponent(req.params.zoneName);
+
+        const incompleteQuests = await database.getIncompleteQuestDetailsForZone(userId, zoneName);
+
+        // Add Wowhead URLs to each quest
+        const questsWithUrls = incompleteQuests.map(quest => ({
+            ...quest,
+            wowhead_url: `https://www.wowhead.com/quest=${quest.quest_id}`
+        }));
+
+        res.json({
+            zone_name: zoneName,
+            incomplete_quests: questsWithUrls,
+            total_incomplete: questsWithUrls.length
+        });
+    } catch (error) {
+        console.error(`Failed to get incomplete quest details for zone ${req.params.zoneName}:`, error);
+        res.status(500).json({ error: 'Failed to get quest details for zone' });
+    }
+});
+
 
 // Recipe caching endpoint - admin/background job
 app.post('/api/cache-recipes', async (req, res) => {

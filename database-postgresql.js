@@ -1317,6 +1317,32 @@ const dbHelpers = {
         }
     },
 
+    getIncompleteQuestDetailsForZone: async function(userId, zoneName) {
+        const client = await pool.connect();
+        try {
+            const result = await client.query(`
+                SELECT
+                    q.quest_id,
+                    q.quest_name,
+                    q.area_name as zone_name,
+                    q.expansion_name,
+                    q.type_name as quest_type,
+                    q.is_seasonal
+                FROM quest_master_cache q
+                LEFT JOIN warband_completed_quests wq ON q.quest_id = wq.quest_id AND wq.user_id = $1
+                WHERE q.area_name = $2
+                  AND wq.quest_id IS NULL
+                  AND q.quest_name IS NOT NULL
+                  AND q.quest_name != ''
+                ORDER BY q.quest_name
+            `, [userId, zoneName]);
+
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
     clearQuestMasterCache: async function() {
         const client = await pool.connect();
         try {

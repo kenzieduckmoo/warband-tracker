@@ -149,6 +149,26 @@
         </main>
     </div>
 
+    <!-- Quest Details Modal -->
+    <div id="quest-details-modal" class="quest-modal hidden">
+        <div class="quest-modal-backdrop" onclick="closeQuestModal()"></div>
+        <div class="quest-modal-content">
+            <div class="quest-modal-header">
+                <h3 id="quest-modal-title">Incomplete Quests</h3>
+                <button class="quest-modal-close" onclick="closeQuestModal()">&times;</button>
+            </div>
+            <div class="quest-modal-body">
+                <div id="quest-loading" class="quest-loading hidden">
+                    <div class="loading-spinner"></div>
+                    Loading quest data...
+                </div>
+                <div id="quest-list" class="quest-list">
+                    <!-- Quest items will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="dashboard.js?v=20250909-level-filters-fixed"></script>
     <script src="footer.js"></script>
 </body>

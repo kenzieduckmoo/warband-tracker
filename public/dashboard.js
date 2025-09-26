@@ -822,7 +822,7 @@ function renderQuestZones() {
                 <div class="zone-header">
                     <span class="zone-name">${zone.zone_name}</span>
                     ${wowheadLink}
-                    <span class="zone-incomplete-count">${zone.incomplete_quests} incomplete</span>
+                    <span class="zone-incomplete-count incomplete-count" onclick="openQuestModal('${zone.zone_name}')">${zone.incomplete_quests} incomplete</span>
                 </div>
                 <div class="zone-completion">
                     <div class="completion-bar">
@@ -836,3 +836,77 @@ function renderQuestZones() {
 
     container.innerHTML = html;
 }
+
+// Quest Details Modal Functions
+async function openQuestModal(zoneName) {
+    const modal = document.getElementById('quest-details-modal');
+    const title = document.getElementById('quest-modal-title');
+    const loading = document.getElementById('quest-loading');
+    const questList = document.getElementById('quest-list');
+
+    // Show modal with loading state
+    title.textContent = `Incomplete Quests - ${zoneName}`;
+    modal.classList.remove('hidden');
+    loading.classList.remove('hidden');
+    questList.innerHTML = '';
+
+    try {
+        const response = await fetch(`/api/incomplete-quests-detail/${encodeURIComponent(zoneName)}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch quest details');
+        }
+
+        const data = await response.json();
+        loading.classList.add('hidden');
+
+        if (data.incomplete_quests.length === 0) {
+            questList.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                    <p>No incomplete quests found for this zone.</p>
+                    <p style="font-size: 0.9em; margin-top: 8px;">All quests may be completed or the quest data needs to be populated.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Render quest list
+        const questsHtml = data.incomplete_quests.map(quest => `
+            <div class="quest-item">
+                <div class="quest-info">
+                    <div class="quest-name">${quest.quest_name}</div>
+                    <div class="quest-details">
+                        ${quest.quest_type ? `<span class="quest-type">${quest.quest_type}</span>` : ''}
+                        <span>Quest ID: ${quest.quest_id}</span>
+                        ${quest.is_seasonal ? '<span class="quest-seasonal">Seasonal</span>' : ''}
+                    </div>
+                </div>
+                <a href="${quest.wowhead_url}" target="_blank" class="quest-wowhead-link">
+                    View on Wowhead
+                </a>
+            </div>
+        `).join('');
+
+        questList.innerHTML = questsHtml;
+
+    } catch (error) {
+        loading.classList.add('hidden');
+        questList.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: var(--error-color);">
+                <p>Failed to load quest details</p>
+                <p style="font-size: 0.9em; margin-top: 8px;">${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function closeQuestModal() {
+    const modal = document.getElementById('quest-details-modal');
+    modal.classList.add('hidden');
+}
+
+// Close modal when pressing Escape key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeQuestModal();
+    }
+});

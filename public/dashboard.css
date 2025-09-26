@@ -1141,4 +1141,190 @@ body {
     color: #e0e0e0;
     text-align: center;
 }
+
+/* Quest Details Modal */
+.quest-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.quest-modal.hidden {
+    display: none;
+}
+
+.quest-modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+}
+
+.quest-modal-content {
+    position: relative;
+    background: var(--card-bg);
+    border-radius: 16px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    max-width: 800px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    animation: modalSlideIn 0.3s ease;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.quest-modal-header {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.quest-modal-header h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1.4rem;
+    flex-grow: 1;
+}
+
+.quest-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 28px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.quest-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.quest-modal-body {
+    padding: 24px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.quest-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px;
+    color: var(--text-secondary);
+}
+
+.quest-loading.hidden {
+    display: none;
+}
+
+.quest-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.quest-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: all 0.2s;
+}
+
+.quest-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-color);
+    transform: translateY(-1px);
+}
+
+.quest-info {
+    flex-grow: 1;
+}
+
+.quest-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.quest-details {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 12px;
+}
+
+.quest-type {
+    color: var(--accent-color);
+}
+
+.quest-seasonal {
+    color: #ff9800;
+    font-weight: 600;
+}
+
+.quest-wowhead-link {
+    background: #f4c431;
+    color: #2c1810;
+    padding: 6px 12px;
+    border-radius: 6px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.quest-wowhead-link:hover {
+    background: #ffd43b;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(244, 196, 49, 0.3);
+}
+
+/* Make incomplete quest counts clickable */
+.incomplete-count {
+    cursor: pointer;
+    transition: all 0.2s;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+.incomplete-count:hover {
+    background: rgba(255, 107, 107, 0.2);
+    transform: translateY(-1px);
+}
 </style>
