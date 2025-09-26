@@ -317,67 +317,96 @@ async function initDatabase() {
         }
 
         // Auction House Integration Tables
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS auction_prices (
-                id SERIAL PRIMARY KEY,
-                connected_realm_id INTEGER NOT NULL,
-                item_id INTEGER NOT NULL,
-                price BIGINT NOT NULL,
-                quantity INTEGER NOT NULL,
-                time_left VARCHAR(20),
-                snapshot_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS auction_prices (
+                    id SERIAL PRIMARY KEY,
+                    connected_realm_id INTEGER NOT NULL,
+                    item_id INTEGER NOT NULL,
+                    price BIGINT NOT NULL,
+                    quantity INTEGER NOT NULL,
+                    time_left VARCHAR(20),
+                    snapshot_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            `);
+            console.log('✅ auction_prices table created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating auction_prices table:', error.message);
+        }
 
-        await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_auction_prices_realm_item_time
-            ON auction_prices(connected_realm_id, item_id, snapshot_time)
-        `);
+        try {
+            await client.query(`
+                CREATE INDEX IF NOT EXISTS idx_auction_prices_realm_item_time
+                ON auction_prices(connected_realm_id, item_id, snapshot_time)
+            `);
+            console.log('✅ auction_prices indexes created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating auction_prices indexes:', error.message);
+        }
 
-        await client.query(`
-            CREATE INDEX IF NOT EXISTS idx_auction_prices_item_time
-            ON auction_prices(item_id, snapshot_time)
-        `);
+        try {
+            await client.query(`
+                CREATE INDEX IF NOT EXISTS idx_auction_prices_item_time
+                ON auction_prices(item_id, snapshot_time)
+            `);
+        } catch (error) {
+            console.log('⚠️ Error creating auction_prices item index:', error.message);
+        }
 
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS current_auctions (
-                connected_realm_id INTEGER NOT NULL,
-                item_id INTEGER NOT NULL,
-                lowest_price BIGINT NOT NULL,
-                avg_price BIGINT,
-                total_quantity INTEGER,
-                auction_count INTEGER,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY(connected_realm_id, item_id)
-            )
-        `);
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS current_auctions (
+                    connected_realm_id INTEGER NOT NULL,
+                    item_id INTEGER NOT NULL,
+                    lowest_price BIGINT NOT NULL,
+                    avg_price BIGINT,
+                    total_quantity INTEGER,
+                    auction_count INTEGER,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(connected_realm_id, item_id)
+                )
+            `);
+            console.log('✅ current_auctions table created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating current_auctions table:', error.message);
+        }
 
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS profession_mains (
-                user_id TEXT NOT NULL,
-                profession_name VARCHAR(50) NOT NULL,
-                character_id TEXT NOT NULL,
-                priority INTEGER DEFAULT 1,
-                assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY(user_id, profession_name, priority),
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (character_id) REFERENCES characters(id)
-            )
-        `);
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS profession_mains (
+                    user_id TEXT NOT NULL,
+                    profession_name VARCHAR(50) NOT NULL,
+                    character_id TEXT NOT NULL,
+                    priority INTEGER DEFAULT 1,
+                    assigned_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(user_id, profession_name, priority),
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (character_id) REFERENCES characters(id)
+                )
+            `);
+            console.log('✅ profession_mains table created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating profession_mains table:', error.message);
+        }
 
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS price_alerts (
-                id SERIAL PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                item_id INTEGER NOT NULL,
-                target_price BIGINT NOT NULL,
-                connected_realm_id INTEGER NOT NULL,
-                is_active BOOLEAN DEFAULT true,
-                created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                triggered_date TIMESTAMP NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        `);
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS price_alerts (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    item_id INTEGER NOT NULL,
+                    target_price BIGINT NOT NULL,
+                    connected_realm_id INTEGER NOT NULL,
+                    is_active BOOLEAN DEFAULT true,
+                    created_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    triggered_date TIMESTAMP NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            `);
+            console.log('✅ price_alerts table created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating price_alerts table:', error.message);
+        }
 
         await client.query('COMMIT');
         console.log('📊 PostgreSQL database initialized successfully');
