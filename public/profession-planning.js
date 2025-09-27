@@ -1077,6 +1077,8 @@ async function displayCollectionAnalytics() {
 async function calculateCurrentCollectionStats() {
     console.log('🔍 calculateCurrentCollectionStats - professionsData:', professionsData);
     console.log('🔍 calculateCurrentCollectionStats - professionsData keys:', Object.keys(professionsData || {}));
+    console.log('🔍 First tier structure:', professionsData[0]);
+    console.log('🔍 First tier field names:', professionsData[0] ? Object.keys(professionsData[0]) : 'No first tier');
 
     if (!professionsData || Object.keys(professionsData).length === 0) {
         console.log('⚠️ No professionsData available for analytics');
@@ -1095,10 +1097,8 @@ async function calculateCurrentCollectionStats() {
     const professionGroups = {};
 
     for (const tier of professionsData) {
-        console.log('🔍 Examining tier:', tier);
         if (tier && tier.profession_name && tier.total_recipes !== undefined) {
             const profName = tier.profession_name;
-            console.log(`✅ Adding tier for ${profName}: ${tier.total_recipes} total, ${tier.known_recipes} known`);
 
             if (!professionGroups[profName]) {
                 professionGroups[profName] = {
@@ -1109,12 +1109,6 @@ async function calculateCurrentCollectionStats() {
 
             professionGroups[profName].totalRecipes += tier.total_recipes || 0;
             professionGroups[profName].knownRecipes += tier.known_recipes || 0;
-        } else {
-            console.log('❌ Skipping tier - missing data:', {
-                hasProfessionName: !!tier?.profession_name,
-                hasTotalRecipes: tier?.total_recipes !== undefined,
-                tier: tier
-            });
         }
     }
 
