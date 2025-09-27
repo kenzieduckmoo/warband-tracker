@@ -1045,16 +1045,18 @@ async function displayCollectionAnalytics() {
 
     try {
         const stats = await calculateCurrentCollectionStats();
-        displayAnalyticsOverview(stats);
-        details.style.display = 'block';
 
         if (currentProfession) {
+            displayProfessionAnalyticsOverview(currentProfession, stats);
             updateSummaryCard(currentProfession);
             updateVelocityCard(null);
             updateProjectionCard(null);
         } else {
+            displayAnalyticsOverview(stats);
             displayOverallAnalytics(stats.professionStats);
         }
+
+        details.style.display = 'block';
     } catch (error) {
         console.error('Error displaying analytics:', error);
         overview.innerHTML = '<div class="analytics-loading">Error loading analytics data</div>';
@@ -1129,6 +1131,52 @@ function displayAnalyticsOverview(stats) {
             <div class="overview-stat">
                 <span class="overview-stat-value">${stats.overallStats.overallCompletion}%</span>
                 <div class="overview-stat-label">Overall Progress</div>
+            </div>
+        </div>
+    `;
+}
+
+function displayProfessionAnalyticsOverview(professionName, stats) {
+    const overview = document.getElementById('analytics-overview');
+
+    // Find the specific profession stats
+    const professionStats = stats.professionStats.find(p => p.category === professionName);
+
+    if (!professionStats) {
+        overview.innerHTML = '<div class="analytics-loading">No data available for this profession</div>';
+        return;
+    }
+
+    // Count characters with this profession
+    const charactersWithProfession = userCharacters.filter(char => {
+        if (!char.professions_list) return false;
+        try {
+            const professions = JSON.parse(char.professions_list);
+            return professions.some(prof => prof.name && prof.name.toLowerCase() === professionName.toLowerCase());
+        } catch (e) {
+            return false;
+        }
+    }).length;
+
+    const missingRecipes = professionStats.total_possible - professionStats.total_collected;
+
+    overview.innerHTML = `
+        <div class="overview-stats">
+            <div class="overview-stat">
+                <span class="overview-stat-value">${charactersWithProfession}</span>
+                <div class="overview-stat-label">Characters with ${professionName.charAt(0).toUpperCase() + professionName.slice(1)}</div>
+            </div>
+            <div class="overview-stat">
+                <span class="overview-stat-value">${professionStats.total_possible}</span>
+                <div class="overview-stat-label">Total Recipes</div>
+            </div>
+            <div class="overview-stat">
+                <span class="overview-stat-value">${missingRecipes}</span>
+                <div class="overview-stat-label">Missing Recipes</div>
+            </div>
+            <div class="overview-stat">
+                <span class="overview-stat-value">${Math.round(professionStats.completion_percentage)}%</span>
+                <div class="overview-stat-label">Completion</div>
             </div>
         </div>
     `;
