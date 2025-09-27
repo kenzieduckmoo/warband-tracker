@@ -354,7 +354,7 @@ function displayMissingRecipes(missingRecipes) {
                 </div>
                 <div class="recipe-actions">
                     <button class="btn btn-small view-wowhead" data-recipe-id="${recipeId}" ${recipeId === 'invalid' ? 'disabled' : ''}>View on Wowhead</button>
-                    <button class="btn btn-small compare-prices" data-recipe-id="${recipeId}" ${recipeId === 'invalid' ? 'disabled' : ''}>Compare Prices</button>
+                    <button class="btn btn-small compare-prices" data-recipe-id="${recipeId}" data-recipe-name="${recipeName}" ${recipeId === 'invalid' ? 'disabled' : ''}>Compare Prices</button>
                 </div>
             </div>
         `;
@@ -376,8 +376,9 @@ function displayMissingRecipes(missingRecipes) {
     recipeList.querySelectorAll('.compare-prices').forEach(btn => {
         btn.addEventListener('click', function() {
             const recipeId = this.dataset.recipeId;
+            const recipeName = this.dataset.recipeName;
             if (recipeId && recipeId !== 'invalid' && !this.disabled) {
-                showCrossServerComparison(recipeId);
+                showCrossServerComparison(recipeId, recipeName);
             }
         });
     });
@@ -607,7 +608,7 @@ function displayRecipeList(recipes) {
                 </div>
                 <div class="recipe-actions">
                     <button class="btn btn-small view-wowhead" data-recipe-id="${recipe.recipe_id}">View on Wowhead</button>
-                    <button class="btn btn-small compare-prices" data-recipe-id="${recipe.recipe_id}">Compare Prices</button>
+                    <button class="btn btn-small compare-prices" data-recipe-id="${recipe.recipe_id}" data-recipe-name="${recipe.recipe_name}">Compare Prices</button>
                 </div>
             </div>
         `;
@@ -627,7 +628,8 @@ function displayRecipeList(recipes) {
     recipeList.querySelectorAll('.compare-prices').forEach(btn => {
         btn.addEventListener('click', function() {
             const recipeId = this.dataset.recipeId;
-            showCrossServerComparison(recipeId);
+            const recipeName = this.dataset.recipeName;
+            showCrossServerComparison(recipeId, recipeName);
         });
     });
 }
@@ -943,7 +945,7 @@ async function refreshAuctionData() {
 }
 
 // Show cross-server price comparison for a specific recipe
-async function showCrossServerComparison(recipeId) {
+async function showCrossServerComparison(recipeId, recipeName = null) {
     const comparisonContent = document.getElementById('comparison-content');
 
     // Show loading state
@@ -963,6 +965,11 @@ async function showCrossServerComparison(recipeId) {
 
         if (!data.success) {
             throw new Error('API request was not successful');
+        }
+
+        // Add recipe name to the data if provided
+        if (recipeName) {
+            data.recipeName = recipeName;
         }
 
         // Display cross-server comparison
@@ -994,9 +1001,11 @@ function displayCrossServerComparison(data) {
     const cheapest = data.cheapestRealm;
     const totalRealms = data.totalRealms;
 
+    const displayTitle = data.recipeName ? data.recipeName : `Recipe ID: ${data.itemId}`;
+
     let html = `
         <div class="comparison-header">
-            <h4>Recipe ID: ${data.itemId} - Found on ${totalRealms} server${totalRealms !== 1 ? 's' : ''}</h4>
+            <h4>${displayTitle} - Found on ${totalRealms} server${totalRealms !== 1 ? 's' : ''}</h4>
             ${cheapest ? `<div class="cheapest-highlight">💰 Cheapest: ${formatGold(cheapest.lowest_price)} on ${cheapest.realm_names}</div>` : ''}
         </div>
         <div class="comparison-table">
