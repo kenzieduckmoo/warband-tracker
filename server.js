@@ -625,7 +625,7 @@ async function updateQuestCacheFromCompletedQuests() {
                     await new Promise(resolve => setTimeout(resolve, 50));
                 } catch (questError) {
                     // Skip quest if API call fails (known issue with Battle.net API)
-                    console.log(`Skipped quest ${questId}: ${questError.message}`);
+                    // console.log(`Skipped quest ${questId}: ${questError.message}`);
                 }
             }
 

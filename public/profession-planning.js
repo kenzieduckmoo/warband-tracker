@@ -1052,17 +1052,13 @@ async function displayCollectionAnalytics() {
 
     try {
         const stats = await calculateCurrentCollectionStats();
-        console.log('🔍 Analytics Debug - currentProfession:', currentProfession);
-        console.log('🔍 Analytics Debug - stats:', stats);
-
         if (currentProfession) {
-            console.log('🎯 Using profession-specific analytics for:', currentProfession);
+            console.log('✅ Loading analytics for profession:', currentProfession);
             displayProfessionAnalyticsOverview(currentProfession, stats);
             updateSummaryCard(currentProfession);
             updateVelocityCard(null);
             updateProjectionCard(null);
         } else {
-            console.log('🌐 Using overall analytics');
             displayAnalyticsOverview(stats);
             displayOverallAnalytics(stats.professionStats);
         }
@@ -1075,10 +1071,10 @@ async function displayCollectionAnalytics() {
 }
 
 async function calculateCurrentCollectionStats() {
-    console.log('🔍 calculateCurrentCollectionStats - professionsData:', professionsData);
-    console.log('🔍 calculateCurrentCollectionStats - professionsData keys:', Object.keys(professionsData || {}));
-    console.log('🔍 First tier structure:', professionsData[0]);
-    console.log('🔍 First tier field names:', professionsData[0] ? Object.keys(professionsData[0]) : 'No first tier');
+    // console.log('🔍 calculateCurrentCollectionStats - professionsData:', professionsData);
+    // console.log('🔍 calculateCurrentCollectionStats - professionsData keys:', Object.keys(professionsData || {}));
+    // console.log('🔍 First tier structure:', professionsData[0]);
+    // console.log('🔍 First tier field names:', professionsData[0] ? Object.keys(professionsData[0]) : 'No first tier');
 
     if (!professionsData || Object.keys(professionsData).length === 0) {
         console.log('⚠️ No professionsData available for analytics');
@@ -1097,7 +1093,7 @@ async function calculateCurrentCollectionStats() {
     const professionGroups = {};
 
     for (const tier of professionsData) {
-        if (tier && tier.profession_name && tier.total_recipes !== undefined) {
+        if (tier && tier.profession_name && tier.total_recipes_available !== undefined) {
             const profName = tier.profession_name;
 
             if (!professionGroups[profName]) {
@@ -1107,12 +1103,12 @@ async function calculateCurrentCollectionStats() {
                 };
             }
 
-            professionGroups[profName].totalRecipes += tier.total_recipes || 0;
-            professionGroups[profName].knownRecipes += tier.known_recipes || 0;
+            professionGroups[profName].totalRecipes += tier.total_recipes_available || 0;
+            professionGroups[profName].knownRecipes += tier.total_recipes_known || 0;
         }
     }
 
-    console.log('🔍 Final profession groups:', professionGroups);
+    console.log('✅ Analytics: Found data for professions:', Object.keys(professionGroups));
 
     // Convert groups to stats array
     for (const [professionName, data] of Object.entries(professionGroups)) {
@@ -1241,9 +1237,9 @@ function updateSummaryCard(professionName) {
     let knownRecipes = 0;
 
     for (const tier of professionTiers) {
-        if (tier.total_recipes !== undefined) {
-            totalRecipes += tier.total_recipes || 0;
-            knownRecipes += tier.known_recipes || 0;
+        if (tier.total_recipes_available !== undefined) {
+            totalRecipes += tier.total_recipes_available || 0;
+            knownRecipes += tier.total_recipes_known || 0;
         }
     }
 
