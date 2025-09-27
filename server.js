@@ -1317,7 +1317,7 @@ async function startPeriodicQuestDiscovery() {
     // Don't start if already running
     if (questDiscoveryInterval) return;
 
-    console.log('🚀 Starting periodic quest discovery service...');
+    // console.log('🚀 Starting periodic quest discovery service...');
 
     const runDiscovery = async () => {
         try {
@@ -3507,14 +3507,14 @@ const server = app.listen(PORT, async () => {
     // Initialize database and start background services
     try {
         await database.initDatabase();
-        console.log('🗃️  Database initialized successfully');
+        // Database initialization logged in database module
 
         // Run character ID migration
         await migrateCharacterIds();
 
         // Start periodic quest discovery service
         await startPeriodicQuestDiscovery();
-        console.log('🔍 Background quest discovery service started');
+        // Background services started
 
     } catch (error) {
         console.error('❌ Initialization error:', error);

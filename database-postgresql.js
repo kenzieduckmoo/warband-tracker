@@ -321,14 +321,14 @@ async function initDatabase() {
         } catch (error) {
             if (error.code === '42701') {
                 // Column already exists, ignore
-                console.log('✅ quest_sync_time column already exists in users table');
+                // console.log('✅ quest_sync_time column already exists in users table');
             } else {
                 console.log('⚠️ Error adding quest_sync_time column:', error.message);
             }
         }
 
         await client.query('COMMIT');
-        console.log('✅ Main database tables initialized successfully');
+        console.log('✅ Database tables initialized successfully');
 
         // Auction House Integration Tables - separate transaction
         await client.query('BEGIN');
@@ -346,7 +346,7 @@ async function initDatabase() {
                     snapshot_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             `);
-            console.log('✅ auction_prices table created/verified');
+            // console.log('✅ auction_prices table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating auction_prices table:', error.message);
         }
@@ -384,7 +384,7 @@ async function initDatabase() {
                     PRIMARY KEY(connected_realm_id, item_id, region)
                 )
             `);
-            console.log('✅ current_auctions table created/verified');
+            // console.log('✅ current_auctions table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating current_auctions table:', error.message);
         }
@@ -402,7 +402,7 @@ async function initDatabase() {
                     FOREIGN KEY (character_id) REFERENCES characters(id)
                 )
             `);
-            console.log('✅ profession_mains table created/verified');
+            // console.log('✅ profession_mains table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating profession_mains table:', error.message);
         }
@@ -421,7 +421,7 @@ async function initDatabase() {
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             `);
-            console.log('✅ price_alerts table created/verified');
+            // console.log('✅ price_alerts table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating price_alerts table:', error.message);
         }
@@ -442,7 +442,7 @@ async function initDatabase() {
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             `);
-            console.log('✅ collection_snapshots table created/verified');
+            // console.log('✅ collection_snapshots table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating collection_snapshots table:', error.message);
         }
@@ -463,7 +463,7 @@ async function initDatabase() {
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             `);
-            console.log('✅ collection_velocity table created/verified');
+            // console.log('✅ collection_velocity table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating collection_velocity table:', error.message);
         }
@@ -484,7 +484,7 @@ async function initDatabase() {
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             `);
-            console.log('✅ completion_projections table created/verified');
+            // console.log('✅ completion_projections table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating completion_projections table:', error.message);
         }
@@ -506,7 +506,7 @@ async function initDatabase() {
                     UNIQUE(connected_realm_id, realm_slug, region)
                 )
             `);
-            console.log('✅ connected_realms table created/verified');
+            // console.log('✅ connected_realms table created/verified');
         } catch (error) {
             console.log('⚠️ Error creating connected_realms table:', error.message);
         }

@@ -212,9 +212,7 @@ function selectProfession(professionName) {
     displayProfessionDataFromDashboard(professionName);
 
     // Update analytics for this profession
-    updateSummaryCard(professionName);
-    updateVelocityCard(null);
-    updateProjectionCard(null);
+    updateProfessionAnalytics(professionName);
 }
 
 // Display profession data using existing dashboard data
@@ -1054,13 +1052,17 @@ async function displayCollectionAnalytics() {
 
     try {
         const stats = await calculateCurrentCollectionStats();
+        console.log('🔍 Analytics Debug - currentProfession:', currentProfession);
+        console.log('🔍 Analytics Debug - stats:', stats);
 
         if (currentProfession) {
+            console.log('🎯 Using profession-specific analytics for:', currentProfession);
             displayProfessionAnalyticsOverview(currentProfession, stats);
             updateSummaryCard(currentProfession);
             updateVelocityCard(null);
             updateProjectionCard(null);
         } else {
+            console.log('🌐 Using overall analytics');
             displayAnalyticsOverview(stats);
             displayOverallAnalytics(stats.professionStats);
         }
@@ -1073,7 +1075,11 @@ async function displayCollectionAnalytics() {
 }
 
 async function calculateCurrentCollectionStats() {
+    console.log('🔍 calculateCurrentCollectionStats - professionsData:', professionsData);
+    console.log('🔍 calculateCurrentCollectionStats - professionsData keys:', Object.keys(professionsData || {}));
+
     if (!professionsData || Object.keys(professionsData).length === 0) {
+        console.log('⚠️ No professionsData available for analytics');
         return {
             overallStats: { totalProfessions: 0, totalRecipes: 0, totalCollected: 0, overallCompletion: 0 },
             professionStats: []
@@ -1297,4 +1303,21 @@ function displayOverallAnalytics(professionStats) {
     collectedRecipesElement.textContent = totalCollected.toLocaleString();
     progressFillElement.style.width = `${overallCompletion}%`;
     progressTextElement.textContent = `${overallCompletion}%`;
+}
+
+async function updateProfessionAnalytics(professionName) {
+    try {
+        const stats = await calculateCurrentCollectionStats();
+        console.log('🔄 Updating profession analytics for:', professionName);
+
+        // Update the overview section with profession-specific data
+        displayProfessionAnalyticsOverview(professionName, stats);
+
+        // Update individual cards
+        updateSummaryCard(professionName);
+        updateVelocityCard(null);
+        updateProjectionCard(null);
+    } catch (error) {
+        console.error('Error updating profession analytics:', error);
+    }
 }
