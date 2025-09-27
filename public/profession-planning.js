@@ -1090,30 +1090,38 @@ async function calculateCurrentCollectionStats() {
     let totalRecipes = 0;
     let totalCollected = 0;
 
-    // professionsData is an array of profession objects, not an object with profession names as keys
-    for (const professionData of professionsData) {
-        if (professionData && professionData.profession_name && professionData.tiers) {
-            let profTotalRecipes = 0;
-            let profKnownRecipes = 0;
+    // professionsData is an array of individual tiers, not grouped professions
+    // Group by profession name and sum up tiers
+    const professionGroups = {};
 
-            for (const tier of professionData.tiers) {
-                if (tier.total_recipes) {
-                    profTotalRecipes += tier.total_recipes;
-                    profKnownRecipes += tier.known_recipes || 0;
-                }
+    for (const tier of professionsData) {
+        if (tier && tier.profession_name && tier.total_recipes !== undefined) {
+            const profName = tier.profession_name;
+
+            if (!professionGroups[profName]) {
+                professionGroups[profName] = {
+                    totalRecipes: 0,
+                    knownRecipes: 0
+                };
             }
 
-            const completionPercentage = profTotalRecipes > 0 ? (profKnownRecipes / profTotalRecipes * 100) : 0;
-            professionStats.push({
-                category: professionData.profession_name,
-                total_possible: profTotalRecipes,
-                total_collected: profKnownRecipes,
-                completion_percentage: completionPercentage
-            });
-
-            totalRecipes += profTotalRecipes;
-            totalCollected += profKnownRecipes;
+            professionGroups[profName].totalRecipes += tier.total_recipes || 0;
+            professionGroups[profName].knownRecipes += tier.known_recipes || 0;
         }
+    }
+
+    // Convert groups to stats array
+    for (const [professionName, data] of Object.entries(professionGroups)) {
+        const completionPercentage = data.totalRecipes > 0 ? (data.knownRecipes / data.totalRecipes * 100) : 0;
+        professionStats.push({
+            category: professionName,
+            total_possible: data.totalRecipes,
+            total_collected: data.knownRecipes,
+            completion_percentage: completionPercentage
+        });
+
+        totalRecipes += data.totalRecipes;
+        totalCollected += data.knownRecipes;
     }
 
     const overallCompletion = totalRecipes > 0 ? (totalCollected / totalRecipes * 100) : 0;
@@ -1204,10 +1212,20 @@ function updateSummaryCard(professionName) {
     const progressFillElement = document.getElementById('progress-fill');
     const progressTextElement = document.getElementById('progress-text');
 
-    // Find the profession data in the array
-    const professionData = professionsData.find(p => p.profession_name === professionName);
+    if (!professionName) {
+        totalRecipesElement.textContent = '-';
+        collectedRecipesElement.textContent = '-';
+        progressFillElement.style.width = '0%';
+        progressTextElement.textContent = '0%';
+        return;
+    }
 
-    if (!professionName || !professionData) {
+    // Find all tiers for this profession (same logic as working profession planning code)
+    const professionTiers = professionsData.filter(tier =>
+        tier.profession_name && tier.profession_name.toLowerCase() === professionName.toLowerCase()
+    );
+
+    if (professionTiers.length === 0) {
         totalRecipesElement.textContent = '-';
         collectedRecipesElement.textContent = '-';
         progressFillElement.style.width = '0%';
@@ -1218,12 +1236,10 @@ function updateSummaryCard(professionName) {
     let totalRecipes = 0;
     let knownRecipes = 0;
 
-    if (professionData.tiers) {
-        for (const tier of professionData.tiers) {
-            if (tier.total_recipes) {
-                totalRecipes += tier.total_recipes;
-                knownRecipes += tier.known_recipes || 0;
-            }
+    for (const tier of professionTiers) {
+        if (tier.total_recipes !== undefined) {
+            totalRecipes += tier.total_recipes || 0;
+            knownRecipes += tier.known_recipes || 0;
         }
     }
 
