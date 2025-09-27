@@ -1181,24 +1181,13 @@ function displayProfessionAnalyticsOverview(professionName, stats) {
         return;
     }
 
-    // Count characters with this profession
-    const charactersWithProfession = userCharacters.filter(char => {
-        if (!char.professions_list) return false;
-        try {
-            const professions = JSON.parse(char.professions_list);
-            return professions.some(prof => prof.name && prof.name.toLowerCase() === professionName.toLowerCase());
-        } catch (e) {
-            return false;
-        }
-    }).length;
-
     const missingRecipes = professionStats.total_possible - professionStats.total_collected;
 
     overview.innerHTML = `
         <div class="overview-stats">
             <div class="overview-stat">
-                <span class="overview-stat-value">${charactersWithProfession}</span>
-                <div class="overview-stat-label">Characters with ${professionName.charAt(0).toUpperCase() + professionName.slice(1)}</div>
+                <span class="overview-stat-value">${professionStats.total_collected}</span>
+                <div class="overview-stat-label">Known Recipes</div>
             </div>
             <div class="overview-stat">
                 <span class="overview-stat-value">${professionStats.total_possible}</span>

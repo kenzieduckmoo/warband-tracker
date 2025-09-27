@@ -629,7 +629,7 @@ async function updateQuestCacheFromCompletedQuests() {
                 }
             }
 
-            console.log(`Processed batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(questIds.length/batchSize)}`);
+            // console.log(`Processed batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(questIds.length/batchSize)}`);
         }
 
         console.log(`Quest cache update complete! Cached ${totalQuestsCached} new quests.`);

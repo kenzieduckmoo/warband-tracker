@@ -17,7 +17,13 @@
     "Added comprehensive explanations and descriptions to collection analytics for user guidance",
     "Fixed cross-server comparison header contrast (removed white-on-yellow unreadable text)",
     "Added internal scrolling to cross-server comparison section (400px max height)",
-    "Enhanced placeholder messages with clear explanations of how analytics features work over time"
+    "Enhanced placeholder messages with clear explanations of how analytics features work over time",
+    "Fixed analytics data structure to use correct field names (total_recipes_available, total_recipes_known)",
+    "Added comprehensive debugging to analytics system for profession-specific data matching",
+    "Removed redundant character count from analytics (already shown in 'Characters with this Profession' section)",
+    "Enhanced analytics to focus on recipe collection progress rather than duplicate character information",
+    "Reduced server log spam by commenting out verbose quest discovery batch progress messages",
+    "Improved analytics overview to show Known Recipes, Total Recipes, Missing Recipes, and Completion %"
   ],
   "releases": {
     "0.4.0": {
