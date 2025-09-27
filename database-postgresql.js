@@ -381,7 +381,7 @@ async function initDatabase() {
                     auction_count INTEGER,
                     region TEXT DEFAULT 'us',
                     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY(connected_realm_id, item_id)
+                    PRIMARY KEY(connected_realm_id, item_id, region)
                 )
             `);
             console.log('✅ current_auctions table created/verified');
@@ -1595,6 +1595,7 @@ const dbHelpers = {
                     const lowestPrice = Math.min(...data.prices);
                     const avgPrice = Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length);
 
+                    // Add each parameter individually to the flat array
                     insertValues.push(
                         connectedRealmId, itemId, lowestPrice, avgPrice,
                         data.totalQuantity, data.auctionCount, region, new Date()
@@ -1605,7 +1606,7 @@ const dbHelpers = {
                 }
 
                 // Batch INSERT
-                if (insertValues.length > 0) {
+                if (batch.length > 0) {
                     await client.query(`
                         INSERT INTO current_auctions
                         (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count, region, last_updated)
@@ -1909,6 +1910,37 @@ async function runMigrations(client) {
             console.log(`✅ Migration: Updated ${updateResult2.rowCount} current_auctions records with default region`);
         } catch (error) {
             console.log('⚠️ Migration warning (region updates):', error.message);
+        }
+
+        // Migration 4: Update current_auctions primary key to include region
+        try {
+            // First, check if the constraint needs updating
+            const constraintCheck = await client.query(`
+                SELECT constraint_name
+                FROM information_schema.table_constraints
+                WHERE table_name = 'current_auctions'
+                AND constraint_type = 'PRIMARY KEY'
+                AND constraint_name = 'current_auctions_pkey'
+            `);
+
+            if (constraintCheck.rows.length > 0) {
+                // Drop the old primary key constraint
+                await client.query(`
+                    ALTER TABLE current_auctions
+                    DROP CONSTRAINT current_auctions_pkey
+                `);
+                console.log('✅ Migration: Dropped old primary key constraint');
+            }
+
+            // Add the new primary key constraint that includes region
+            await client.query(`
+                ALTER TABLE current_auctions
+                ADD CONSTRAINT current_auctions_pkey
+                PRIMARY KEY (connected_realm_id, item_id, region)
+            `);
+            console.log('✅ Migration: Added new primary key constraint with region');
+        } catch (error) {
+            console.log('⚠️ Migration warning (primary key update):', error.message);
         }
 
         console.log('✅ Database migrations completed successfully');
