@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', async function() {
         await loadProfessionMains();
         setupEventListeners();
         updateProfessionList();
+
+        // Load collection analytics
+        await loadCollectionAnalytics();
     } catch (error) {
         console.error('Failed to initialize profession planning:', error);
         showError('Failed to load profession data. Please refresh the page.');
@@ -207,6 +210,11 @@ function selectProfession(professionName) {
 
     // Display profession data using existing dashboard data
     displayProfessionDataFromDashboard(professionName);
+
+    // Update analytics for this profession
+    updateSummaryCard(professionName);
+    updateVelocityCard(null);
+    updateProjectionCard(null);
 }
 
 // Display profession data using existing dashboard data
@@ -1018,4 +1026,218 @@ function displayCrossServerComparison(data) {
 
     html += '</div>';
     comparisonContent.innerHTML = html;
+}
+
+// Collection Analytics Functions
+async function loadCollectionAnalytics() {
+    try {
+        await displayCollectionAnalytics();
+    } catch (error) {
+        console.error('Error loading collection analytics:', error);
+        const overview = document.getElementById('analytics-overview');
+        overview.innerHTML = '<div class="analytics-loading">Unable to load collection analytics</div>';
+    }
+}
+
+async function displayCollectionAnalytics() {
+    const overview = document.getElementById('analytics-overview');
+    const details = document.getElementById('analytics-details');
+
+    try {
+        const stats = await calculateCurrentCollectionStats();
+        displayAnalyticsOverview(stats);
+        details.style.display = 'block';
+
+        if (currentProfession) {
+            updateSummaryCard(currentProfession);
+            updateVelocityCard(null);
+            updateProjectionCard(null);
+        } else {
+            displayOverallAnalytics(stats.professionStats);
+        }
+    } catch (error) {
+        console.error('Error displaying analytics:', error);
+        overview.innerHTML = '<div class="analytics-loading">Error loading analytics data</div>';
+    }
+}
+
+async function calculateCurrentCollectionStats() {
+    if (!professionsData || Object.keys(professionsData).length === 0) {
+        return {
+            overallStats: { totalProfessions: 0, totalRecipes: 0, totalCollected: 0, overallCompletion: 0 },
+            professionStats: []
+        };
+    }
+
+    const professionStats = [];
+    let totalRecipes = 0;
+    let totalCollected = 0;
+
+    for (const [professionName, professionData] of Object.entries(professionsData)) {
+        if (professionData && professionData.tiers) {
+            let profTotalRecipes = 0;
+            let profKnownRecipes = 0;
+
+            for (const tier of professionData.tiers) {
+                if (tier.total_recipes) {
+                    profTotalRecipes += tier.total_recipes;
+                    profKnownRecipes += tier.known_recipes || 0;
+                }
+            }
+
+            const completionPercentage = profTotalRecipes > 0 ? (profKnownRecipes / profTotalRecipes * 100) : 0;
+            professionStats.push({
+                category: professionName,
+                total_possible: profTotalRecipes,
+                total_collected: profKnownRecipes,
+                completion_percentage: completionPercentage
+            });
+
+            totalRecipes += profTotalRecipes;
+            totalCollected += profKnownRecipes;
+        }
+    }
+
+    const overallCompletion = totalRecipes > 0 ? (totalCollected / totalRecipes * 100) : 0;
+    return {
+        overallStats: {
+            totalProfessions: professionStats.length,
+            totalRecipes,
+            totalCollected,
+            overallCompletion: Math.round(overallCompletion * 100) / 100
+        },
+        professionStats
+    };
+}
+
+function displayAnalyticsOverview(stats) {
+    const overview = document.getElementById('analytics-overview');
+    overview.innerHTML = `
+        <div class="overview-stats">
+            <div class="overview-stat">
+                <span class="overview-stat-value">${stats.overallStats.totalProfessions}</span>
+                <div class="overview-stat-label">Professions Tracked</div>
+            </div>
+            <div class="overview-stat">
+                <span class="overview-stat-value">${stats.overallStats.totalRecipes}</span>
+                <div class="overview-stat-label">Total Recipes</div>
+            </div>
+            <div class="overview-stat">
+                <span class="overview-stat-value">${stats.overallStats.totalCollected}</span>
+                <div class="overview-stat-label">Recipes Known</div>
+            </div>
+            <div class="overview-stat">
+                <span class="overview-stat-value">${stats.overallStats.overallCompletion}%</span>
+                <div class="overview-stat-label">Overall Progress</div>
+            </div>
+        </div>
+    `;
+}
+
+function updateSummaryCard(professionName) {
+    const totalRecipesElement = document.getElementById('total-recipes');
+    const collectedRecipesElement = document.getElementById('collected-recipes');
+    const progressFillElement = document.getElementById('progress-fill');
+    const progressTextElement = document.getElementById('progress-text');
+
+    if (!professionName || !professionsData[professionName]) {
+        totalRecipesElement.textContent = '-';
+        collectedRecipesElement.textContent = '-';
+        progressFillElement.style.width = '0%';
+        progressTextElement.textContent = '0%';
+        return;
+    }
+
+    const professionData = professionsData[professionName];
+    let totalRecipes = 0;
+    let knownRecipes = 0;
+
+    if (professionData.tiers) {
+        for (const tier of professionData.tiers) {
+            if (tier.total_recipes) {
+                totalRecipes += tier.total_recipes;
+                knownRecipes += tier.known_recipes || 0;
+            }
+        }
+    }
+
+    const completionPercentage = totalRecipes > 0 ? Math.round((knownRecipes / totalRecipes) * 100) : 0;
+
+    totalRecipesElement.textContent = totalRecipes.toLocaleString();
+    collectedRecipesElement.textContent = knownRecipes.toLocaleString();
+    progressFillElement.style.width = `${completionPercentage}%`;
+    progressTextElement.textContent = `${completionPercentage}%`;
+}
+
+function updateVelocityCard(velocityData) {
+    const weeklyElement = document.getElementById('velocity-weekly');
+    const monthlyElement = document.getElementById('velocity-monthly');
+    const trendElement = document.getElementById('velocity-trend');
+
+    if (!velocityData) {
+        weeklyElement.textContent = 'No data';
+        monthlyElement.textContent = 'No data';
+        trendElement.innerHTML = '<em>Historical data needed to track velocity. Check back after using the profession planner regularly!</em>';
+        trendElement.className = 'velocity-trend-placeholder';
+        return;
+    }
+
+    weeklyElement.textContent = `${velocityData.weekly || 0} recipes/week`;
+    monthlyElement.textContent = `${velocityData.monthly || 0} recipes/month`;
+
+    if (velocityData.trend === 'increasing') {
+        trendElement.innerHTML = '📈 <span class="trend-increasing">Accelerating progress</span>';
+    } else if (velocityData.trend === 'decreasing') {
+        trendElement.innerHTML = '📉 <span class="trend-decreasing">Slowing progress</span>';
+    } else {
+        trendElement.innerHTML = '➡️ <span class="trend-stable">Steady progress</span>';
+    }
+}
+
+function updateProjectionCard(projectionData) {
+    const currentProgressElement = document.getElementById('current-progress');
+    const estimatedCompletionElement = document.getElementById('estimated-completion');
+    const projectionConfidenceElement = document.getElementById('projection-confidence');
+
+    if (!projectionData) {
+        currentProgressElement.textContent = '-';
+        estimatedCompletionElement.textContent = 'No data';
+        projectionConfidenceElement.innerHTML = '<em>Projections will be available after collecting more historical data.</em>';
+        projectionConfidenceElement.className = 'projection-confidence-placeholder';
+        return;
+    }
+
+    currentProgressElement.textContent = `${projectionData.current_percentage || 0}%`;
+
+    if (projectionData.estimated_completion_date) {
+        const completionDate = new Date(projectionData.estimated_completion_date);
+        estimatedCompletionElement.textContent = completionDate.toLocaleDateString();
+    } else {
+        estimatedCompletionElement.textContent = 'Unknown';
+    }
+
+    const confidence = projectionData.confidence_level || 'low';
+    const confidenceText = confidence === 'high' ? 'High confidence' :
+                          confidence === 'medium' ? 'Medium confidence' : 'Low confidence';
+    projectionConfidenceElement.innerHTML = `📊 ${confidenceText} projection`;
+    projectionConfidenceElement.className = `projection-confidence-${confidence}`;
+}
+
+function displayOverallAnalytics(professionStats) {
+    updateVelocityCard(null);
+    updateProjectionCard(null);
+
+    const totalRecipesElement = document.getElementById('total-recipes');
+    const collectedRecipesElement = document.getElementById('collected-recipes');
+    const progressFillElement = document.getElementById('progress-fill');
+    const progressTextElement = document.getElementById('progress-text');
+
+    const totalRecipes = professionStats.reduce((sum, prof) => sum + prof.total_possible, 0);
+    const totalCollected = professionStats.reduce((sum, prof) => sum + prof.total_collected, 0);
+    const overallCompletion = totalRecipes > 0 ? Math.round((totalCollected / totalRecipes) * 100) : 0;
+
+    totalRecipesElement.textContent = totalRecipes.toLocaleString();
+    collectedRecipesElement.textContent = totalCollected.toLocaleString();
+    progressFillElement.style.width = `${overallCompletion}%`;
+    progressTextElement.textContent = `${overallCompletion}%`;
 }

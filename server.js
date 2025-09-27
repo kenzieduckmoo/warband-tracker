@@ -3332,6 +3332,150 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
+// Collection Analytics API Endpoints
+app.get('/api/collection/stats/:userId', requireAuth, async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        // Get profession collection stats
+        const professionStats = await database.getProfessionCollectionStats(userId);
+
+        // Calculate overall stats
+        const totalProfessions = professionStats.length;
+        const avgCompletion = professionStats.reduce((sum, prof) => sum + prof.completion_percentage, 0) / totalProfessions;
+        const totalRecipes = professionStats.reduce((sum, prof) => sum + prof.total_possible, 0);
+        const totalCollected = professionStats.reduce((sum, prof) => sum + prof.total_collected, 0);
+
+        res.json({
+            success: true,
+            professionStats,
+            overallStats: {
+                totalProfessions,
+                avgCompletion: Math.round(avgCompletion * 100) / 100,
+                totalRecipes,
+                totalCollected,
+                overallCompletion: Math.round((totalCollected / totalRecipes) * 10000) / 100
+            }
+        });
+    } catch (error) {
+        console.error('❌ Failed to get collection stats:', error);
+        res.status(500).json({ error: 'Failed to get collection stats: ' + error.message });
+    }
+});
+
+app.get('/api/collection/velocity/:userId/:category', requireAuth, async (req, res) => {
+    try {
+        const { userId, category } = req.params;
+        const { subcategory, timeframe = 7 } = req.query;
+
+        const velocity = await database.calculateCollectionVelocity(
+            userId,
+            category,
+            subcategory || null,
+            parseInt(timeframe)
+        );
+
+        if (!velocity) {
+            return res.json({
+                success: true,
+                velocity: null,
+                message: 'Insufficient data for velocity calculation'
+            });
+        }
+
+        res.json({
+            success: true,
+            velocity: {
+                ...velocity,
+                velocityPerWeek: velocity.velocityPerDay * 7,
+                velocityPerMonth: velocity.velocityPerDay * 30
+            }
+        });
+    } catch (error) {
+        console.error('❌ Failed to calculate velocity:', error);
+        res.status(500).json({ error: 'Failed to calculate velocity: ' + error.message });
+    }
+});
+
+app.get('/api/collection/projections/:userId/:category', requireAuth, async (req, res) => {
+    try {
+        const { userId, category } = req.params;
+        const { subcategory, targetCompletion = 100 } = req.query;
+
+        const projection = await database.generateCompletionProjection(
+            userId,
+            category,
+            subcategory || null,
+            parseFloat(targetCompletion)
+        );
+
+        if (!projection) {
+            return res.json({
+                success: true,
+                projection: null,
+                message: 'Insufficient data for projection or no progress detected'
+            });
+        }
+
+        res.json({
+            success: true,
+            projection
+        });
+    } catch (error) {
+        console.error('❌ Failed to generate projection:', error);
+        res.status(500).json({ error: 'Failed to generate projection: ' + error.message });
+    }
+});
+
+app.post('/api/collection/snapshot', requireAuth, async (req, res) => {
+    try {
+        const { userId, category, subcategory, totalPossible, totalCollected, metadata } = req.body;
+
+        if (!userId || !category || typeof totalPossible !== 'number' || typeof totalCollected !== 'number') {
+            return res.status(400).json({ error: 'Missing required fields: userId, category, totalPossible, totalCollected' });
+        }
+
+        const snapshotId = await database.createCollectionSnapshot(
+            userId,
+            category,
+            subcategory,
+            totalPossible,
+            totalCollected,
+            metadata
+        );
+
+        res.json({
+            success: true,
+            snapshotId
+        });
+    } catch (error) {
+        console.error('❌ Failed to create collection snapshot:', error);
+        res.status(500).json({ error: 'Failed to create collection snapshot: ' + error.message });
+    }
+});
+
+app.get('/api/collection/history/:userId/:category', requireAuth, async (req, res) => {
+    try {
+        const { userId, category } = req.params;
+        const { subcategory, daysBack = 30 } = req.query;
+
+        const history = await database.getCollectionHistory(
+            userId,
+            category,
+            subcategory || null,
+            parseInt(daysBack)
+        );
+
+        res.json({
+            success: true,
+            history
+        });
+    } catch (error) {
+        console.error('❌ Failed to get collection history:', error);
+        res.status(500).json({ error: 'Failed to get collection history: ' + error.message });
+    }
+});
+
 const server = app.listen(PORT, async () => {
     console.log(`✨ Warband Tracker (PostgreSQL) running on http://localhost:${PORT}`);
     console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);

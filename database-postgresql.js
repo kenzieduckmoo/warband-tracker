@@ -426,7 +426,68 @@ async function initDatabase() {
             console.log('⚠️ Error creating price_alerts table:', error.message);
         }
 
-        // Price history and trends tables removed for simplicity
+        // Collection Analytics Tables
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS collection_snapshots (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    category VARCHAR(50) NOT NULL,
+                    subcategory VARCHAR(100),
+                    total_possible INTEGER NOT NULL,
+                    total_collected INTEGER NOT NULL,
+                    completion_percentage DECIMAL(5,2) NOT NULL,
+                    snapshot_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    metadata JSONB,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            `);
+            console.log('✅ collection_snapshots table created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating collection_snapshots table:', error.message);
+        }
+
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS collection_velocity (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    category VARCHAR(50) NOT NULL,
+                    subcategory VARCHAR(100),
+                    timeframe VARCHAR(20) NOT NULL,
+                    items_gained INTEGER NOT NULL,
+                    velocity_per_day DECIMAL(10,4) NOT NULL,
+                    period_start TIMESTAMP NOT NULL,
+                    period_end TIMESTAMP NOT NULL,
+                    calculated_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            `);
+            console.log('✅ collection_velocity table created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating collection_velocity table:', error.message);
+        }
+
+        try {
+            await client.query(`
+                CREATE TABLE IF NOT EXISTS completion_projections (
+                    id SERIAL PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    category VARCHAR(50) NOT NULL,
+                    subcategory VARCHAR(100),
+                    current_completion DECIMAL(5,2) NOT NULL,
+                    target_completion DECIMAL(5,2) NOT NULL,
+                    estimated_days INTEGER,
+                    estimated_completion_date TIMESTAMP,
+                    confidence_level DECIMAL(3,2),
+                    projection_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            `);
+            console.log('✅ completion_projections table created/verified');
+        } catch (error) {
+            console.log('⚠️ Error creating completion_projections table:', error.message);
+        }
         // Focus on real-time auction data only
 
         // Create connected realms mapping table
@@ -1730,6 +1791,162 @@ const dbHelpers = {
                 JOIN characters c ON pm.character_id = c.id
                 WHERE pm.user_id = $1
                 ORDER BY pm.profession_name, pm.priority
+            `, [userId]);
+
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
+    // Collection Analytics Functions
+    createCollectionSnapshot: async function(userId, category, subcategory, totalPossible, totalCollected, metadata = null) {
+        const client = await pool.connect();
+        try {
+            const completionPercentage = totalPossible > 0 ? (totalCollected / totalPossible * 100) : 0;
+
+            const result = await client.query(`
+                INSERT INTO collection_snapshots
+                (user_id, category, subcategory, total_possible, total_collected, completion_percentage, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id
+            `, [userId, category, subcategory, totalPossible, totalCollected, completionPercentage, metadata]);
+
+            return result.rows[0].id;
+        } finally {
+            client.release();
+        }
+    },
+
+    getCollectionHistory: async function(userId, category, subcategory = null, daysBack = 30) {
+        const client = await pool.connect();
+        try {
+            const query = subcategory
+                ? `SELECT * FROM collection_snapshots
+                   WHERE user_id = $1 AND category = $2 AND subcategory = $3
+                   AND snapshot_date > CURRENT_TIMESTAMP - INTERVAL '${daysBack} days'
+                   ORDER BY snapshot_date ASC`
+                : `SELECT * FROM collection_snapshots
+                   WHERE user_id = $1 AND category = $2
+                   AND snapshot_date > CURRENT_TIMESTAMP - INTERVAL '${daysBack} days'
+                   ORDER BY snapshot_date ASC`;
+
+            const params = subcategory ? [userId, category, subcategory] : [userId, category];
+            const result = await client.query(query, params);
+
+            return result.rows;
+        } finally {
+            client.release();
+        }
+    },
+
+    calculateCollectionVelocity: async function(userId, category, subcategory = null, timeframeDays = 7) {
+        const client = await pool.connect();
+        try {
+            // Get snapshots for the specified timeframe
+            const snapshots = await this.getCollectionHistory(userId, category, subcategory, timeframeDays * 2);
+
+            if (snapshots.length < 2) {
+                return null; // Not enough data for velocity calculation
+            }
+
+            const latest = snapshots[snapshots.length - 1];
+            const earliest = snapshots[0];
+
+            const daysDifference = (new Date(latest.snapshot_date) - new Date(earliest.snapshot_date)) / (1000 * 60 * 60 * 24);
+            const itemsGained = latest.total_collected - earliest.total_collected;
+            const velocityPerDay = daysDifference > 0 ? itemsGained / daysDifference : 0;
+
+            // Store velocity calculation
+            await client.query(`
+                INSERT INTO collection_velocity
+                (user_id, category, subcategory, timeframe, items_gained, velocity_per_day, period_start, period_end)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `, [userId, category, subcategory, `${timeframeDays}d`, itemsGained, velocityPerDay, earliest.snapshot_date, latest.snapshot_date]);
+
+            return {
+                itemsGained,
+                velocityPerDay,
+                timeframeDays,
+                periodStart: earliest.snapshot_date,
+                periodEnd: latest.snapshot_date
+            };
+        } finally {
+            client.release();
+        }
+    },
+
+    generateCompletionProjection: async function(userId, category, subcategory = null, targetCompletion = 100) {
+        const client = await pool.connect();
+        try {
+            // Get recent velocity data
+            const velocity = await this.calculateCollectionVelocity(userId, category, subcategory, 14); // 2 week velocity
+
+            if (!velocity || velocity.velocityPerDay <= 0) {
+                return null; // No progress or insufficient data
+            }
+
+            // Get current completion
+            const snapshots = await this.getCollectionHistory(userId, category, subcategory, 7);
+            if (snapshots.length === 0) return null;
+
+            const current = snapshots[snapshots.length - 1];
+            const remainingItems = (current.total_possible * targetCompletion / 100) - current.total_collected;
+
+            if (remainingItems <= 0) {
+                return { alreadyComplete: true, currentCompletion: current.completion_percentage };
+            }
+
+            const estimatedDays = Math.ceil(remainingItems / velocity.velocityPerDay);
+            const estimatedCompletionDate = new Date();
+            estimatedCompletionDate.setDate(estimatedCompletionDate.getDate() + estimatedDays);
+
+            // Calculate confidence based on velocity consistency
+            const confidenceLevel = Math.min(0.95, Math.max(0.1, velocity.velocityPerDay * 0.1));
+
+            // Store projection
+            await client.query(`
+                INSERT INTO completion_projections
+                (user_id, category, subcategory, current_completion, target_completion, estimated_days, estimated_completion_date, confidence_level)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `, [userId, category, subcategory, current.completion_percentage, targetCompletion, estimatedDays, estimatedCompletionDate, confidenceLevel]);
+
+            return {
+                currentCompletion: current.completion_percentage,
+                targetCompletion,
+                estimatedDays,
+                estimatedCompletionDate,
+                confidenceLevel,
+                velocityPerDay: velocity.velocityPerDay
+            };
+        } finally {
+            client.release();
+        }
+    },
+
+    getProfessionCollectionStats: async function(userId) {
+        const client = await pool.connect();
+        try {
+            // Calculate profession completion stats from existing profession data
+            const result = await client.query(`
+                WITH profession_stats AS (
+                    SELECT
+                        profession_name,
+                        COUNT(*) as total_recipes,
+                        SUM(CASE WHEN completion_percentage = 100 THEN 1 ELSE 0 END) as completed_recipes,
+                        AVG(completion_percentage) as avg_completion
+                    FROM enhanced_professions_summary
+                    WHERE user_id = $1
+                    GROUP BY profession_name
+                )
+                SELECT
+                    profession_name as category,
+                    'recipes' as subcategory,
+                    total_recipes as total_possible,
+                    completed_recipes as total_collected,
+                    ROUND(avg_completion, 2) as completion_percentage
+                FROM profession_stats
+                ORDER BY avg_completion DESC
             `, [userId]);
 
             return result.rows;

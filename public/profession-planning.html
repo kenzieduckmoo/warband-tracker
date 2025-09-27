@@ -207,6 +207,74 @@
                             <p>Select recipes above to see cross-server pricing...</p>
                         </div>
                     </div>
+
+                    <!-- Collection Analytics -->
+                    <div class="analytics-section">
+                        <h3>📊 Collection Progress Analytics</h3>
+                        <div class="analytics-content">
+                            <div class="analytics-overview" id="analytics-overview">
+                                <div class="analytics-loading">Loading collection analytics...</div>
+                            </div>
+
+                            <div class="analytics-details" id="analytics-details" style="display: none;">
+                                <div class="analytics-grid">
+                                    <div class="analytics-card">
+                                        <h4>📈 Collection Velocity</h4>
+                                        <div id="velocity-content">
+                                            <div class="velocity-stat">
+                                                <span class="velocity-label">Weekly Rate:</span>
+                                                <span class="velocity-value" id="velocity-weekly">-</span>
+                                            </div>
+                                            <div class="velocity-stat">
+                                                <span class="velocity-label">Monthly Rate:</span>
+                                                <span class="velocity-value" id="velocity-monthly">-</span>
+                                            </div>
+                                            <div class="velocity-trend" id="velocity-trend">
+                                                Calculating trend...
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="analytics-card">
+                                        <h4>🎯 Completion Projection</h4>
+                                        <div id="projection-content">
+                                            <div class="projection-stat">
+                                                <span class="projection-label">Current Progress:</span>
+                                                <span class="projection-value" id="current-progress">-</span>
+                                            </div>
+                                            <div class="projection-stat">
+                                                <span class="projection-label">Est. Completion:</span>
+                                                <span class="projection-value" id="estimated-completion">-</span>
+                                            </div>
+                                            <div class="projection-confidence" id="projection-confidence">
+                                                Analyzing patterns...
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="analytics-card">
+                                        <h4>📋 Progress Summary</h4>
+                                        <div id="summary-content">
+                                            <div class="summary-stat">
+                                                <span class="summary-label">Total Recipes:</span>
+                                                <span class="summary-value" id="total-recipes">-</span>
+                                            </div>
+                                            <div class="summary-stat">
+                                                <span class="summary-label">Collected:</span>
+                                                <span class="summary-value" id="collected-recipes">-</span>
+                                            </div>
+                                            <div class="summary-progress">
+                                                <div class="progress-bar">
+                                                    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                                                </div>
+                                                <span class="progress-text" id="progress-text">0%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>
