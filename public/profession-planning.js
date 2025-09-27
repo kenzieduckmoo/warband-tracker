@@ -936,15 +936,86 @@ async function refreshAuctionData() {
 
 // Show cross-server price comparison for a specific recipe
 async function showCrossServerComparison(recipeId) {
-    try {
-        showLoading('Loading cross-server comparison...');
+    const comparisonContent = document.getElementById('comparison-content');
 
-        // This would fetch cross-server pricing for the specific recipe
-        // For now, show a placeholder message
-        showError('Cross-server comparison feature coming in a future update!');
+    // Show loading state
+    comparisonContent.innerHTML = '<div class="loading-message">🔍 Loading cross-server pricing...</div>';
+
+    try {
+        // Get user's region (assuming 'us' for now, could be made dynamic)
+        const userRegion = 'us';
+
+        const response = await fetch(`/api/cross-server/price-comparison/${recipeId}/${userRegion}`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error('API request was not successful');
+        }
+
+        // Display cross-server comparison
+        displayCrossServerComparison(data);
 
     } catch (error) {
         console.error('Error loading cross-server comparison:', error);
-        showError('Failed to load cross-server comparison');
+        comparisonContent.innerHTML = `
+            <div class="error-message">
+                ❌ Failed to load cross-server pricing: ${error.message}
+            </div>
+        `;
     }
+}
+
+// Display cross-server price comparison data
+function displayCrossServerComparison(data) {
+    const comparisonContent = document.getElementById('comparison-content');
+
+    if (!data.priceComparison || data.priceComparison.length === 0) {
+        comparisonContent.innerHTML = `
+            <div class="no-data-message">
+                📭 No auction house data found for this recipe across any servers in ${data.region.toUpperCase()}.
+            </div>
+        `;
+        return;
+    }
+
+    const cheapest = data.cheapestRealm;
+    const totalRealms = data.totalRealms;
+
+    let html = `
+        <div class="comparison-header">
+            <h4>Recipe ID: ${data.itemId} - Found on ${totalRealms} server${totalRealms !== 1 ? 's' : ''}</h4>
+            ${cheapest ? `<div class="cheapest-highlight">💰 Cheapest: ${formatGold(cheapest.lowest_price)} on ${cheapest.realm_names}</div>` : ''}
+        </div>
+        <div class="comparison-table">
+            <div class="comparison-header-row">
+                <div class="realm-col">Server(s)</div>
+                <div class="price-col">Lowest Price</div>
+                <div class="avg-col">Avg Price</div>
+                <div class="quantity-col">Available</div>
+                <div class="updated-col">Last Updated</div>
+            </div>
+    `;
+
+    data.priceComparison.forEach((realm, index) => {
+        const isCheapest = index === 0;
+        const updatedTime = new Date(realm.last_updated).toLocaleString();
+
+        html += `
+            <div class="comparison-row ${isCheapest ? 'cheapest-row' : ''}">
+                <div class="realm-col">${realm.realm_names}</div>
+                <div class="price-col">${formatGold(realm.lowest_price)}</div>
+                <div class="avg-col">${formatGold(realm.avg_price)}</div>
+                <div class="quantity-col">${realm.total_quantity} (${realm.auction_count} auctions)</div>
+                <div class="updated-col">${updatedTime}</div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    comparisonContent.innerHTML = html;
 }

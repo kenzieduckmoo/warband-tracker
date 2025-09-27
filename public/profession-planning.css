@@ -318,6 +318,142 @@ body {
     padding: 40px 20px;
 }
 
+/* Cross-Server Comparison Styles */
+.comparison-section {
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    margin-top: 20px;
+}
+
+.comparison-header h4 {
+    margin: 0 0 10px 0;
+    color: var(--text-primary);
+    font-size: 1.1em;
+}
+
+.cheapest-highlight {
+    background: linear-gradient(135deg, #2d5a2d, #3d7c47);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    display: inline-block;
+}
+
+.comparison-table {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.comparison-header-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr 1.5fr;
+    gap: 10px;
+    padding: 12px;
+    background: var(--accent-color);
+    color: white;
+    font-weight: bold;
+    border-radius: 6px 6px 0 0;
+    font-size: 0.9em;
+}
+
+.comparison-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1.5fr 1.5fr;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.comparison-row:hover {
+    background: var(--bg-secondary);
+}
+
+.cheapest-row {
+    background: linear-gradient(135deg, rgba(45, 90, 45, 0.1), rgba(61, 124, 71, 0.1));
+    border-color: #3d7c47;
+}
+
+.cheapest-row:hover {
+    background: linear-gradient(135deg, rgba(45, 90, 45, 0.2), rgba(61, 124, 71, 0.2));
+}
+
+.realm-col {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.price-col, .avg-col {
+    font-weight: bold;
+    color: var(--accent-color);
+}
+
+.quantity-col {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+}
+
+.updated-col {
+    color: var(--text-secondary);
+    font-size: 0.85em;
+}
+
+.no-data-message, .error-message {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.error-message {
+    color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.1);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+/* Responsive design for comparison table */
+@media (max-width: 768px) {
+    .comparison-header-row,
+    .comparison-row {
+        grid-template-columns: 1fr;
+        gap: 5px;
+        text-align: center;
+    }
+
+    .comparison-header-row {
+        display: none; /* Hide header on mobile, rely on labels */
+    }
+
+    .comparison-row {
+        background: var(--bg-secondary);
+        border-radius: 6px;
+        margin-bottom: 10px;
+        padding: 15px;
+    }
+
+    .comparison-row > div {
+        padding: 5px 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .comparison-row > div:last-child {
+        border-bottom: none;
+    }
+
+    .realm-col::before { content: "Server: "; font-weight: normal; color: var(--text-secondary); }
+    .price-col::before { content: "Lowest: "; font-weight: normal; color: var(--text-secondary); }
+    .avg-col::before { content: "Average: "; font-weight: normal; color: var(--text-secondary); }
+    .quantity-col::before { content: "Available: "; font-weight: normal; color: var(--text-secondary); }
+    .updated-col::before { content: "Updated: "; font-weight: normal; color: var(--text-secondary); }
+}
+
 /* Buttons */
 .btn {
     padding: 10px 20px;
