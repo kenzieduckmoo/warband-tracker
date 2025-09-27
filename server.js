@@ -3057,8 +3057,8 @@ app.get('/api/cross-server/price-comparison/:itemId/:region', requireAuth, async
                     ca.total_quantity,
                     ca.auction_count,
                     ca.last_updated,
-                    STRING_AGG(cr.realm_name, ', ') as realm_names,
-                    STRING_AGG(cr.realm_slug, ', ') as realm_slugs
+                    STRING_AGG(DISTINCT cr.realm_name, ', ') as realm_names,
+                    STRING_AGG(DISTINCT cr.realm_slug, ', ') as realm_slugs
                 FROM current_auctions ca
                 JOIN connected_realms cr ON ca.connected_realm_id = cr.connected_realm_id
                     AND ca.region = cr.region

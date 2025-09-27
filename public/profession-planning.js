@@ -1234,7 +1234,7 @@ function updateVelocityCard(velocityData) {
     if (!velocityData) {
         weeklyElement.textContent = 'No data';
         monthlyElement.textContent = 'No data';
-        trendElement.innerHTML = '<em>Historical data needed to track velocity. Check back after using the profession planner regularly!</em>';
+        trendElement.innerHTML = '<em>📈 Velocity tracking requires historical data. Use the profession planner regularly and check back in a few days to see your learning trends!</em>';
         trendElement.className = 'velocity-trend-placeholder';
         return;
     }
@@ -1259,7 +1259,7 @@ function updateProjectionCard(projectionData) {
     if (!projectionData) {
         currentProgressElement.textContent = '-';
         estimatedCompletionElement.textContent = 'No data';
-        projectionConfidenceElement.innerHTML = '<em>Projections will be available after collecting more historical data.</em>';
+        projectionConfidenceElement.innerHTML = '<em>🎯 Completion projections require tracking your recipe learning over time. Keep using the planner to build this data!</em>';
         projectionConfidenceElement.className = 'projection-confidence-placeholder';
         return;
     }

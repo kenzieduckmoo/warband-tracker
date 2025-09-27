@@ -330,6 +330,12 @@ body {
     margin-top: 20px;
 }
 
+.comparison-content {
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 .comparison-header h4 {
     margin: 0 0 10px 0;
     color: var(--text-primary);
@@ -357,10 +363,11 @@ body {
     grid-template-columns: 2fr 1fr 1fr 1.5fr 1.5fr;
     gap: 10px;
     padding: 12px;
-    background: var(--accent-color);
-    color: white;
+    background: var(--bg-primary);
+    color: var(--accent-color);
     font-weight: bold;
     border-radius: 6px 6px 0 0;
+    border: 2px solid var(--accent-color);
     font-size: 0.9em;
 }
 
@@ -466,6 +473,21 @@ body {
     margin-top: 20px;
 }
 
+.analytics-description {
+    background: linear-gradient(135deg, rgba(74, 144, 226, 0.1), rgba(80, 250, 123, 0.1));
+    border: 1px solid rgba(74, 144, 226, 0.3);
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.analytics-description p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.95em;
+    line-height: 1.4;
+}
+
 .analytics-loading {
     text-align: center;
     color: var(--text-secondary);
@@ -494,11 +516,18 @@ body {
 }
 
 .analytics-card h4 {
-    margin: 0 0 15px 0;
+    margin: 0 0 10px 0;
     color: var(--text-primary);
     font-size: 1.1em;
     border-bottom: 2px solid var(--accent-color);
     padding-bottom: 8px;
+}
+
+.card-description {
+    margin: 0 0 15px 0;
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    font-style: italic;
 }
 
 /* Velocity Card Styles */
