@@ -3057,13 +3057,7 @@ app.get('/api/cross-server/price-comparison/:itemId/:region', requireAuth, async
                     ca.total_quantity,
                     ca.auction_count,
                     ca.last_updated,
-                    STRING_AGG(
-                        CASE
-                            WHEN cr.realm_name::text LIKE '{%' THEN (cr.realm_name->>'en_US')
-                            ELSE cr.realm_name::text
-                        END,
-                        ', '
-                    ) as realm_names,
+                    STRING_AGG(cr.realm_name, ', ') as realm_names,
                     STRING_AGG(cr.realm_slug, ', ') as realm_slugs
                 FROM current_auctions ca
                 JOIN connected_realms cr ON ca.connected_realm_id = cr.connected_realm_id
@@ -3074,13 +3068,32 @@ app.get('/api/cross-server/price-comparison/:itemId/:region', requireAuth, async
                 ORDER BY ca.lowest_price ASC
             `, [parseInt(itemId), region]);
 
+            // Process realm names to extract English text
+            const processedRows = result.rows.map(row => {
+                const realmNames = row.realm_names.split(', ').map(name => {
+                    try {
+                        // Try to parse as JSON first
+                        const parsed = JSON.parse(name);
+                        return extractEnglishText(parsed) || name;
+                    } catch (e) {
+                        // If not JSON, use as-is
+                        return name;
+                    }
+                }).join(', ');
+
+                return {
+                    ...row,
+                    realm_names: realmNames
+                };
+            });
+
             res.json({
                 success: true,
                 itemId: parseInt(itemId),
                 region,
-                priceComparison: result.rows,
-                cheapestRealm: result.rows.length > 0 ? result.rows[0] : null,
-                totalRealms: result.rows.length
+                priceComparison: processedRows,
+                cheapestRealm: processedRows.length > 0 ? processedRows[0] : null,
+                totalRealms: processedRows.length
             });
         } finally {
             client.release();
