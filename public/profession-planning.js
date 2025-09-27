@@ -453,6 +453,9 @@ async function loadAuctionHousePrices(missingRecipes) {
 
         console.log(`Loaded prices for ${pricesFound}/${missingRecipes.length} recipes. Total cost: ${formatGold(totalCost)}`);
 
+        // Apply default sorting (least expensive first)
+        sortRecipes();
+
     } catch (error) {
         console.error('Failed to load bulk auction prices:', error);
         // Fall back to showing "Price unavailable" for all
@@ -784,13 +787,35 @@ function sortRecipes() {
     recipeItems.sort((a, b) => {
         switch (sortValue) {
             case 'cost-desc':
-                const priceA = extractPrice(a.querySelector('.recipe-price').textContent);
-                const priceB = extractPrice(b.querySelector('.recipe-price').textContent);
+                const priceTextA = a.querySelector('.recipe-price').textContent;
+                const priceTextB = b.querySelector('.recipe-price').textContent;
+                const isNotAvailableA = priceTextA.includes('Not available');
+                const isNotAvailableB = priceTextB.includes('Not available');
+
+                // Put "Not available" items at the end
+                if (isNotAvailableA && !isNotAvailableB) return 1;
+                if (!isNotAvailableA && isNotAvailableB) return -1;
+                if (isNotAvailableA && isNotAvailableB) return 0;
+
+                const priceA = extractPrice(priceTextA);
+                const priceB = extractPrice(priceTextB);
                 return priceB - priceA;
+
             case 'cost-asc':
-                const priceA2 = extractPrice(a.querySelector('.recipe-price').textContent);
-                const priceB2 = extractPrice(b.querySelector('.recipe-price').textContent);
+                const priceTextA2 = a.querySelector('.recipe-price').textContent;
+                const priceTextB2 = b.querySelector('.recipe-price').textContent;
+                const isNotAvailableA2 = priceTextA2.includes('Not available');
+                const isNotAvailableB2 = priceTextB2.includes('Not available');
+
+                // Put "Not available" items at the end
+                if (isNotAvailableA2 && !isNotAvailableB2) return 1;
+                if (!isNotAvailableA2 && isNotAvailableB2) return -1;
+                if (isNotAvailableA2 && isNotAvailableB2) return 0;
+
+                const priceA2 = extractPrice(priceTextA2);
+                const priceB2 = extractPrice(priceTextB2);
                 return priceA2 - priceB2;
+
             case 'name-asc':
                 const nameA = a.querySelector('.recipe-name').textContent;
                 const nameB = b.querySelector('.recipe-name').textContent;

@@ -34,7 +34,12 @@
     "Implemented recipe sorting (by cost, name) and shopping list export functionality",
     "Added comprehensive validation for recipe IDs and auction house data integrity",
     "Profession planning now shows real auction house costs (e.g., 375799g for missing Alchemy recipes)",
-    "Performance optimized: single bulk API call instead of 463+ individual requests per profession"
+    "Performance optimized: single bulk API call instead of 463+ individual requests per profession",
+    "Fixed profession sidebar character count display - now shows accurate counts for each profession",
+    "Fixed character selection modal to only show characters with the selected profession",
+    "Enhanced recipe sorting with proper handling of unavailable items (sorted to end for cost-based sorts)",
+    "Set default recipe sort to 'Least Expensive First' for better user experience",
+    "Added comprehensive debug logging for profession data troubleshooting"
   ],
   "releases": {
     "0.3.3": {
