@@ -1538,22 +1538,12 @@ const dbHelpers = {
     upsertAuctionData: async function(connectedRealmId, auctionData, region = 'us') {
         const client = await pool.connect();
         try {
-            console.log(`🗄️ Starting database upsert for realm ${connectedRealmId}: ${auctionData.length} auctions`);
             await client.query('BEGIN');
 
-            // We'll use UPSERT instead of deleting to preserve historical data
-            console.log(`📅 Using UPSERT approach to preserve historical auction data for realm ${connectedRealmId}...`);
-
             // Process auction data and insert current auctions
-            console.log(`📊 Processing ${auctionData.length} auction records...`);
             const itemPrices = new Map();
-            let processedCount = 0;
 
             for (const auction of auctionData) {
-                processedCount++;
-                if (processedCount % 10000 === 0) {
-                    console.log(`📈 Processed ${processedCount}/${auctionData.length} auctions...`);
-                }
                 const itemId = auction.item.id;
                 const price = auction.buyout || auction.bid || 0;
                 const quantity = auction.quantity || 1;
@@ -1577,11 +1567,10 @@ const dbHelpers = {
                 // We'll aggregate this data later with the daily aggregation function
             }
 
-            console.log(`💾 Batch inserting ${itemPrices.size} current auction summaries...`);
 
             // Process in batches to avoid PostgreSQL parameter limits
-            // PostgreSQL limit is ~65,535 parameters, so we can safely do ~9,000 rows × 7 params = 63,000 params
-            const batchSize = 9000; // Large batches for maximum performance while staying under limit
+            // PostgreSQL limit is ~65,535 parameters, so we can safely do ~5,000 rows × 8 params = 40,000 params
+            const batchSize = 5000; // Conservative batch size to avoid parameter limit issues
             const itemPricesArray = Array.from(itemPrices);
             let totalInserted = 0;
 
@@ -1607,6 +1596,7 @@ const dbHelpers = {
 
                 // Batch INSERT
                 if (batch.length > 0) {
+
                     await client.query(`
                         INSERT INTO current_auctions
                         (connected_realm_id, item_id, lowest_price, avg_price, total_quantity, auction_count, region, last_updated)
@@ -1620,14 +1610,10 @@ const dbHelpers = {
                             last_updated = EXCLUDED.last_updated
                     `, insertValues);
 
-                    totalInserted += batch.length;
-                    console.log(`✅ Inserted batch ${Math.ceil((i + batchSize) / batchSize)}/${Math.ceil(itemPricesArray.length / batchSize)}: ${totalInserted}/${itemPricesArray.length} summaries`);
                 }
             }
 
-            console.log(`✅ Committing transaction for realm ${connectedRealmId}...`);
             await client.query('COMMIT');
-            console.log(`🎉 Successfully processed realm ${connectedRealmId}: ${itemPrices.size} items, ${auctionData.length} auctions`);
             return { itemsProcessed: itemPrices.size, auctionsProcessed: auctionData.length };
         } catch (error) {
             await client.query('ROLLBACK');
@@ -1900,14 +1886,11 @@ async function runMigrations(client) {
                 SET region = 'us'
                 WHERE region IS NULL
             `);
-            console.log(`✅ Migration: Updated ${updateResult1.rowCount} auction_prices records with default region`);
-
             const updateResult2 = await client.query(`
                 UPDATE current_auctions
                 SET region = 'us'
                 WHERE region IS NULL
             `);
-            console.log(`✅ Migration: Updated ${updateResult2.rowCount} current_auctions records with default region`);
         } catch (error) {
             console.log('⚠️ Migration warning (region updates):', error.message);
         }
@@ -1929,7 +1912,6 @@ async function runMigrations(client) {
                     ALTER TABLE current_auctions
                     DROP CONSTRAINT current_auctions_pkey
                 `);
-                console.log('✅ Migration: Dropped old primary key constraint');
             }
 
             // Add the new primary key constraint that includes region
@@ -1938,12 +1920,10 @@ async function runMigrations(client) {
                 ADD CONSTRAINT current_auctions_pkey
                 PRIMARY KEY (connected_realm_id, item_id, region)
             `);
-            console.log('✅ Migration: Added new primary key constraint with region');
         } catch (error) {
             console.log('⚠️ Migration warning (primary key update):', error.message);
         }
 
-        console.log('✅ Database migrations completed successfully');
     } catch (error) {
         console.error('❌ Migration error:', error.message);
         // Don't throw - let the app continue even if migrations have issues

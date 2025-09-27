@@ -314,7 +314,6 @@ async function updateRecipeCache() {
 // Auction House Data Collection Service
 async function updateAuctionHouseData(connectedRealmId, region = 'us') {
     try {
-        console.log(`📊 Fetching auction house data for connected realm ${connectedRealmId} (${region.toUpperCase()})...`);
 
         const token = await getClientCredentialsToken(region);
         const startTime = Date.now();
@@ -329,12 +328,8 @@ async function updateAuctionHouseData(connectedRealmId, region = 'us') {
             }
         );
 
-        const fetchTime = Date.now() - startTime;
-        console.log(`⏱️ API fetch completed in ${fetchTime}ms for realm ${connectedRealmId}`);
-
         if (response.data && response.data.auctions) {
             const result = await database.upsertAuctionData(connectedRealmId, response.data.auctions, region);
-            console.log(`✅ Updated auction data for realm ${connectedRealmId} (${region.toUpperCase()}): ${result.itemsProcessed} items, ${result.auctionsProcessed} auctions`);
             return result;
         } else {
             console.log(`⚠️ No auction data returned for realm ${connectedRealmId}`);
@@ -2852,7 +2847,6 @@ app.post('/api/admin/update-auction-house', async (req, res) => {
                 const region = row.region || 'us'; // Default to US if no region
 
                 try {
-                    console.log(`🔄 Updating auction data for ${realmSlug} (${region.toUpperCase()})...`);
 
                     // Get connected realm ID for this realm and region
                     const connectedRealmId = await getConnectedRealmId(realmSlug, region);
@@ -2871,7 +2865,7 @@ app.post('/api/admin/update-auction-house', async (req, res) => {
                     // Small delay between realm updates to avoid rate limiting
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 } catch (error) {
-                    console.error(`❌ Failed to update ${realmSlug} (${region}):`, error.message);
+                    console.error(`❌ Failed to update auction house data for realm ${connectedRealmId}:`, error.message);
                     updateDetails.push({
                         realm: realmSlug,
                         region: region.toUpperCase(),
