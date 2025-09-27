@@ -1163,10 +1163,20 @@ function displayAnalyticsOverview(stats) {
 function displayProfessionAnalyticsOverview(professionName, stats) {
     const overview = document.getElementById('analytics-overview');
 
-    // Find the specific profession stats
-    const professionStats = stats.professionStats.find(p => p.category === professionName);
+    console.log('🔍 displayProfessionAnalyticsOverview - professionName:', professionName);
+    console.log('🔍 displayProfessionAnalyticsOverview - stats:', stats);
+    console.log('🔍 displayProfessionAnalyticsOverview - stats.professionStats:', stats.professionStats);
+
+    // Find the specific profession stats (case-insensitive)
+    const professionStats = stats.professionStats.find(p =>
+        p.category && p.category.toLowerCase() === professionName.toLowerCase()
+    );
+
+    console.log('🔍 displayProfessionAnalyticsOverview - found professionStats:', professionStats);
+    console.log('🔍 Available categories:', stats.professionStats.map(p => p.category));
 
     if (!professionStats) {
+        console.log('❌ No profession stats found for:', professionName);
         overview.innerHTML = '<div class="analytics-loading">No data available for this profession</div>';
         return;
     }
