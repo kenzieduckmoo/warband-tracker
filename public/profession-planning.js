@@ -1090,8 +1090,9 @@ async function calculateCurrentCollectionStats() {
     let totalRecipes = 0;
     let totalCollected = 0;
 
-    for (const [professionName, professionData] of Object.entries(professionsData)) {
-        if (professionData && professionData.tiers) {
+    // professionsData is an array of profession objects, not an object with profession names as keys
+    for (const professionData of professionsData) {
+        if (professionData && professionData.profession_name && professionData.tiers) {
             let profTotalRecipes = 0;
             let profKnownRecipes = 0;
 
@@ -1104,7 +1105,7 @@ async function calculateCurrentCollectionStats() {
 
             const completionPercentage = profTotalRecipes > 0 ? (profKnownRecipes / profTotalRecipes * 100) : 0;
             professionStats.push({
-                category: professionName,
+                category: professionData.profession_name,
                 total_possible: profTotalRecipes,
                 total_collected: profKnownRecipes,
                 completion_percentage: completionPercentage
@@ -1203,7 +1204,10 @@ function updateSummaryCard(professionName) {
     const progressFillElement = document.getElementById('progress-fill');
     const progressTextElement = document.getElementById('progress-text');
 
-    if (!professionName || !professionsData[professionName]) {
+    // Find the profession data in the array
+    const professionData = professionsData.find(p => p.profession_name === professionName);
+
+    if (!professionName || !professionData) {
         totalRecipesElement.textContent = '-';
         collectedRecipesElement.textContent = '-';
         progressFillElement.style.width = '0%';
@@ -1211,7 +1215,6 @@ function updateSummaryCard(professionName) {
         return;
     }
 
-    const professionData = professionsData[professionName];
     let totalRecipes = 0;
     let knownRecipes = 0;
 
