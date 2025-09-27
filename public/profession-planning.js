@@ -1095,8 +1095,10 @@ async function calculateCurrentCollectionStats() {
     const professionGroups = {};
 
     for (const tier of professionsData) {
+        console.log('🔍 Examining tier:', tier);
         if (tier && tier.profession_name && tier.total_recipes !== undefined) {
             const profName = tier.profession_name;
+            console.log(`✅ Adding tier for ${profName}: ${tier.total_recipes} total, ${tier.known_recipes} known`);
 
             if (!professionGroups[profName]) {
                 professionGroups[profName] = {
@@ -1107,8 +1109,16 @@ async function calculateCurrentCollectionStats() {
 
             professionGroups[profName].totalRecipes += tier.total_recipes || 0;
             professionGroups[profName].knownRecipes += tier.known_recipes || 0;
+        } else {
+            console.log('❌ Skipping tier - missing data:', {
+                hasProfessionName: !!tier?.profession_name,
+                hasTotalRecipes: tier?.total_recipes !== undefined,
+                tier: tier
+            });
         }
     }
+
+    console.log('🔍 Final profession groups:', professionGroups);
 
     // Convert groups to stats array
     for (const [professionName, data] of Object.entries(professionGroups)) {
